@@ -1,12 +1,69 @@
 import os
 import shutil
 import socket
+import subprocess
+import tempfile
+from pathlib import Path
 from collections import Counter
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 import dpkt
+from pcap_story import AnalysisConfig, ZeekError, get_flowchart
 
 app = FastAPI(title="NetFlow Analyzer API")
+
+
+@app.get("/", include_in_schema=False)
+def dashboard():
+    return FileResponse(Path(__file__).with_name("dashboard.html"))
+
+
+def analyze_upload(file):
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in {".pcap", ".pcapng", ".cap"}:
+        raise HTTPException(400, "Upload a .pcap, .pcapng, or .cap capture.")
+    try:
+        config = AnalysisConfig(
+            runtime=os.getenv("PCAP_ZEEK_RUNTIME", "native"),
+            wsl_distribution=os.getenv("PCAP_ZEEK_DISTRIBUTION") or None,
+            zeek_binary=os.getenv("PCAP_ZEEK_BINARY", "zeek"),
+            timeout_seconds=float(os.getenv("PCAP_ZEEK_TIMEOUT", "600")),
+        )
+    except ValueError as exc:
+        raise HTTPException(503, "Invalid server Zeek configuration.") from exc
+    try:
+        with tempfile.TemporaryDirectory(prefix="pcap_upload_") as directory:
+            capture = Path(directory) / ("capture" + suffix)
+            with capture.open("wb") as destination:
+                size = 0
+                while chunk := file.file.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > 500 * 1024 * 1024:
+                        raise HTTPException(413, "Capture exceeds the 500 MB upload limit.")
+                    destination.write(chunk)
+            result = get_flowchart(capture, config=config)
+            result["summary"]["pcap"] = (file.filename or "capture").replace("\\", "/").rsplit("/", 1)[-1]
+            return result
+    except ZeekError as exc:
+        cause = exc.__cause__
+        status = 504 if isinstance(cause, subprocess.TimeoutExpired) else (
+            503 if isinstance(cause, OSError) or "WSL" in str(exc) else 502
+        )
+        raise HTTPException(status, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(500, "Could not read or process the uploaded capture.") from exc
+
+
+@app.post("/api/flowchart")
+async def flowchart(file: UploadFile = File(...)):
+    try:
+        return await run_in_threadpool(analyze_upload, file)
+    finally:
+        await file.close()
 
 # Allow requests from your frontend
 app.add_middleware(

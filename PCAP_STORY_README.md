@@ -168,3 +168,25 @@ isolation, shared-IP SNI precedence, suffix safety, IPv6/HTTP, unknown counters,
 graph consistency/limits, TSV/JSON parsing, input checks, subprocess failures,
 WSL command construction, and temporary-directory cleanup. They do not substitute
 for running an actual capture through an installed Zeek runtime.
+
+## Interactive website
+
+Run `python -m pip install -r requirements.txt`, then `python -m uvicorn main:app --reload` from the repository root. Open http://127.0.0.1:8000 and upload a .pcap, .pcapng, or .cap capture. Section 4 shows real analysis; other analytics are labeled demo data. Internet access is required for the pinned Cytoscape 3.30.4 and existing styling/chart CDNs.
+
+For Windows, install WSL and Zeek in a Linux distribution first. Check `wsl --distribution Ubuntu --exec zeek --version`, then configure the server:
+
+```powershell
+$env:PCAP_ZEEK_RUNTIME = 'wsl'
+$env:PCAP_ZEEK_DISTRIBUTION = 'Ubuntu'
+$env:PCAP_ZEEK_BINARY = 'zeek'
+$env:PCAP_ZEEK_TIMEOUT = '600'
+python -m uvicorn main:app --reload
+```
+
+Use an absolute Linux path for PCAP_ZEEK_BINARY if Zeek is absent from WSL's noninteractive PATH. Native installations default to runtime native, binary zeek, and a 600-second timeout.
+
+POST /api/flowchart accepts multipart field file and returns summary, activities, nodes, and edges. Errors: invalid captures 400, uploads over 500 MB 413, missing uploads 422, unavailable runtime/configuration 503, analysis failures 502, timeout 504. Capture uploads and Zeek logs are temporary and cleaned after success or failure. The existing statistics endpoint is preserved.
+
+Zoom with the mouse wheel, pan by dragging the background, drag nodes, and click nodes/connections for activity details and evidence. Fit and reset-layout controls restore the view. Warnings include empty results and graph truncation (100 activities by default); the response retains all activities. No capture history is saved.
+
+Tests: install httpx, then run `python -m unittest discover -s tests -v`.

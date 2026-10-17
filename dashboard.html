@@ -6,6 +6,7 @@
     <title>NetFlow Protocol Analyzer</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Font Awesome for Icons -->
@@ -148,7 +149,7 @@
                         <h2 class="text-lg font-semibold text-gray-800 mb-4">1. Data Input</h2>
                         
                         <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer group">
-                            <input type="file" id="file-input" class="hidden" accept=".pcap,.pcapng">
+                            <input type="file" id="file-input" class="hidden" accept=".pcap,.pcapng,.cap">
                             <div class="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
                                 <i class="fa-solid fa-cloud-arrow-up"></i>
                             </div>
@@ -163,7 +164,7 @@
 
                     <!-- 2. Protocol Matrix -->
                     <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex-1">
-                        <h2 class="text-lg font-semibold text-gray-800 mb-4">2. Protocol Matrix</h2>
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4">2. Protocol Matrix (Demo data)</h2>
                         
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 h-full">
                             <!-- Card 1: TCP -->
@@ -282,10 +283,10 @@
                 <!-- Right Column (Analytics & Flow) -->
                 <div class="xl:col-span-7 space-y-6 flex flex-col">
                     
-                    <!-- 3. Network Analytics Overview -->
+                    <!-- 3. Network Analytics Overview (Demo data) -->
                     <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                         <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-lg font-semibold text-gray-800">3. Network Analytics Overview</h2>
+                            <h2 class="text-lg font-semibold text-gray-800">3. Network Analytics Overview (Demo data)</h2>
                             <button id="refresh-charts-btn" class="text-gray-400 hover:text-blue-600 transition-colors" title="Reload Data">
                                 <i class="fa-solid fa-rotate-right"></i>
                             </button>
@@ -329,66 +330,16 @@
                     <!-- 4. Data Processing Flow -->
                     <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex-1">
                         <h2 class="text-lg font-semibold text-gray-800 mb-4">4. Data Processing Flow</h2>
-                        
-                        <div class="border border-dashed border-gray-200 rounded-xl p-6 bg-gray-50/30 flex flex-col items-center justify-center h-[calc(100%-2rem)]">
-                            
-                            <!-- Flow Node 1 -->
-                            <div class="bg-blue-600 text-white rounded-lg px-6 py-3 w-64 shadow-md flex flex-col items-center relative z-10 hover:-translate-y-1 transition-transform">
-                                <div class="flex items-center gap-2 font-semibold">
-                                    <i class="fa-solid fa-file-arrow-up"></i> [FILE UPLOAD]
-                                </div>
-                                <span class="text-xs opacity-90">Start</span>
-                            </div>
-
-                            <div class="h-6 border-l-2 border-blue-300 relative z-0">
-                                <div class="absolute -bottom-1 -left-[5px] text-blue-300 text-[10px]"><i class="fa-solid fa-chevron-down"></i></div>
-                            </div>
-
-                            <!-- Flow Node 2 -->
-                            <div class="bg-blue-600 text-white rounded-lg px-6 py-3 w-64 shadow-md flex flex-col items-center relative z-10 hover:-translate-y-1 transition-transform">
-                                <div class="flex items-center gap-2 font-semibold">
-                                    <i class="fa-solid fa-box-open"></i> [PACKET DECODING]
-                                </div>
-                                <span class="text-xs opacity-90">Protocol Identification</span>
-                            </div>
-
-                            <div class="h-6 border-l-2 border-blue-300 relative z-0">
-                                <div class="absolute -bottom-1 -left-[5px] text-blue-300 text-[10px]"><i class="fa-solid fa-chevron-down"></i></div>
-                            </div>
-
-                            <!-- Flow Node 3 -->
-                            <div class="bg-blue-600 text-white rounded-lg px-6 py-3 w-64 shadow-md flex flex-col items-center relative z-10 hover:-translate-y-1 transition-transform">
-                                <div class="flex items-center gap-2 font-semibold">
-                                    <i class="fa-solid fa-chart-pie"></i> [TRAFFIC ANALYSIS]
-                                </div>
-                                <span class="text-xs opacity-90">Statistical Calculation</span>
-                            </div>
-
-                            <div class="h-6 border-l-2 border-blue-300 relative z-0">
-                                <div class="absolute -bottom-1 -left-[5px] text-blue-300 text-[10px]"><i class="fa-solid fa-chevron-down"></i></div>
-                            </div>
-
-                            <!-- Flow Node 4 -->
-                            <div class="bg-blue-600 text-white rounded-lg px-6 py-3 w-64 shadow-md flex flex-col items-center relative z-10 hover:-translate-y-1 transition-transform">
-                                <div class="flex items-center gap-2 font-semibold">
-                                    <i class="fa-solid fa-chart-line"></i> [RESULT VISUALIZATION]
-                                </div>
-                                <span class="text-xs opacity-90">Graph Generation</span>
-                            </div>
-
-                            <div class="h-6 border-l-2 border-blue-300 relative z-0">
-                                <div class="absolute -bottom-1 -left-[5px] text-blue-300 text-[10px]"><i class="fa-solid fa-chevron-down"></i></div>
-                            </div>
-
-                            <!-- Flow Node 5 -->
-                            <div class="bg-blue-600 text-white rounded-lg px-6 py-3 w-64 shadow-md flex flex-col items-center relative z-10 hover:-translate-y-1 transition-transform">
-                                <div class="flex items-center gap-2 font-semibold">
-                                    <i class="fa-solid fa-file-pdf"></i> [GENERATE REPORT]
-                                </div>
-                                <span class="text-xs opacity-90">Export PDF/CSV</span>
-                            </div>
-
+                        <div class="flex gap-3 mb-3 text-sm">
+                            <button id="fit-graph" class="border rounded px-3 py-1" disabled>Fit to view</button>
+                            <button id="reset-graph" class="border rounded px-3 py-1" disabled>Reset layout</button>
                         </div>
+                        <p class="text-xs text-gray-500 mb-2">Zoom with the mouse wheel · Drag the background to pan · Drag nodes · Click to inspect</p>
+                        <p class="text-xs mb-3">🔵 Host · 🟦 Server · 🟢 Domain · 🟣 Activity</p>
+                        <p id="graph-status" role="status" aria-live="polite" class="text-sm mb-2">Upload a capture to generate its flowchart.</p>
+                        <ul id="graph-warnings" class="text-xs text-amber-700 list-disc pl-4 mb-2"></ul>
+                        <div id="flow-graph" style="height:480px; min-height:320px" class="border rounded-xl bg-gray-50" aria-label="Interactive capture flowchart"></div>
+                        <div id="graph-details" class="mt-3 border rounded-lg p-3 text-sm break-words" aria-live="polite">Select a node or connection to inspect its evidence.</div>
                     </section>
 
                 </div>
@@ -555,34 +506,122 @@
             packetSizeChartInstance.update();
         }
 
-        // File Upload Simulation Logic
-        function handleFileProcessing() {
-            const overlay = document.getElementById('loading-overlay');
-            overlay.style.display = 'flex';
+        let graph = null;
+        let graphResult = null;
+        let processing = false;
+        const graphLayout = () => ({ name: 'cose', animate: false, randomize: true, padding: 35 });
 
-            // Simulate parsing time (2 seconds)
-            setTimeout(() => {
-                overlay.style.display = 'none';
-                updateChartsWithData(mockData);
-                
-                // Show a brief success toast (simple implementation)
-                const btn = document.getElementById('select-file-btn');
-                const originalText = btn.innerText;
-                btn.innerText = "Analyzed Successfully!";
-                btn.classList.replace('bg-blue-600', 'bg-green-600');
-                btn.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
-                
-                setTimeout(() => {
-                    btn.innerText = originalText;
-                    btn.classList.replace('bg-green-600', 'bg-blue-600');
-                    btn.classList.replace('hover:bg-green-700', 'hover:bg-blue-700');
-                }, 3000);
-            }, 2000);
+        function showDetails(element) {
+            const panel = document.getElementById('graph-details');
+            panel.replaceChildren();
+            const heading = document.createElement('h3');
+            heading.className = 'font-semibold mb-2';
+            heading.textContent = element.data('label');
+            panel.appendChild(heading);
+            const id = element.data('activity_id');
+            const ids = new Set(element.data('activity_ids') || (id ? [id] : []));
+            if (element.isNode()) {
+                element.connectedEdges().forEach(edge => (edge.data('activity_ids') || []).forEach(value => ids.add(value)));
+            }
+            const activities = graphResult.activities.filter(activity => ids.has(activity.id));
+            const metadata = document.createElement('pre');
+            metadata.className = 'whitespace-pre-wrap text-xs mb-3';
+            metadata.textContent = JSON.stringify(element.data(), null, 2);
+            panel.appendChild(metadata);
+            activities.forEach(activity => {
+                const details = document.createElement('details');
+                details.className = 'border-t py-2';
+                const title = document.createElement('summary');
+                title.textContent = activity.title;
+                const evidence = document.createElement('pre');
+                evidence.className = 'whitespace-pre-wrap text-xs mt-2';
+                evidence.textContent = JSON.stringify({
+                    ...activity,
+                    start_time_utc: new Date(activity.start_time * 1000).toISOString(),
+                    end_time_utc: new Date(activity.end_time * 1000).toISOString()
+                }, null, 2);
+                details.append(title, evidence);
+                panel.appendChild(details);
+            });
+        }
+
+        function renderGraph(result) {
+            graphResult = result;
+            graph = cytoscape({
+                container: document.getElementById('flow-graph'),
+                elements: [
+                    ...result.nodes.map(node => ({ data: { ...node.data, id: node.id, label: node.label, type: node.type } })),
+                    ...result.edges.map(edge => ({ data: { ...edge.data, id: edge.id, source: edge.source, target: edge.target, label: edge.label, type: edge.type } }))
+                ],
+                style: [
+                    { selector: 'node', style: { 'label': 'data(label)', 'background-color': '#2563eb', 'color': '#334155', 'font-size': 11, 'text-wrap': 'wrap', 'text-max-width': 140, 'text-valign': 'bottom', 'text-margin-y': 7, 'width': 35, 'height': 35 } },
+                    { selector: 'node[type="server"]', style: { 'shape': 'roundrectangle', 'background-color': '#0ea5e9' } },
+                    { selector: 'node[type="domain"]', style: { 'shape': 'diamond', 'background-color': '#10b981' } },
+                    { selector: 'node[type="activity"]', style: { 'shape': 'roundrectangle', 'background-color': '#8b5cf6', 'width': 55 } },
+                    { selector: 'edge', style: { 'width': 1.5, 'line-color': '#94a3b8', 'target-arrow-color': '#94a3b8', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'label': 'data(label)', 'font-size': 8, 'text-rotation': 'autorotate', 'text-background-color': '#ffffff', 'text-background-opacity': 0.85 } },
+                    { selector: ':selected', style: { 'border-width': 3, 'border-color': '#f59e0b', 'line-color': '#f59e0b', 'target-arrow-color': '#f59e0b' } }
+                ],
+                layout: graphLayout(), minZoom: 0.05, maxZoom: 5
+            });
+            graph.on('tap', 'node, edge', event => showDetails(event.target));
+            document.getElementById('fit-graph').disabled = result.nodes.length === 0;
+            document.getElementById('reset-graph').disabled = result.nodes.length === 0;
+        }
+
+        async function handleFileProcessing(file) {
+            if (processing || !file) return;
+            const status = document.getElementById('graph-status');
+            if (file.size > 500 * 1024 * 1024) {
+                status.textContent = 'Capture exceeds the 500 MB upload limit.';
+                return;
+            }
+            if (!/\.(pcap|pcapng|cap)$/i.test(file.name)) {
+                status.textContent = 'Please select a .pcap, .pcapng, or .cap capture.';
+                return;
+            }
+            processing = true;
+            document.getElementById('file-input').disabled = true;
+            document.getElementById('select-file-btn').disabled = true;
+            document.getElementById('fit-graph').disabled = true;
+            document.getElementById('reset-graph').disabled = true;
+            if (graph) { graph.destroy(); graph = null; }
+            graphResult = null;
+            document.getElementById('graph-details').textContent = 'Select a node or connection to inspect its evidence.';
+            document.getElementById('graph-warnings').replaceChildren();
+            status.textContent = 'Analyzing ' + file.name + '…';
+            try {
+                if (typeof cytoscape !== 'function') throw new Error('Graph library could not load. Check your connection and reload.');
+                const body = new FormData();
+                body.append('file', file);
+                const response = await fetch('/api/flowchart', { method: 'POST', body });
+                const result = await response.json();
+                if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Capture analysis failed.');
+                renderGraph(result);
+                status.textContent = result.nodes.length
+                    ? file.name + ': ' + result.summary.activity_count + ' activities, ' + result.nodes.length + ' nodes, ' + result.edges.length + ' connections.'
+                    : 'Analysis completed. No supported connections were found in this capture.';
+                (result.summary.warnings || []).forEach(warning => {
+                    const item = document.createElement('li');
+                    item.textContent = warning;
+                    document.getElementById('graph-warnings').appendChild(item);
+                });
+            } catch (error) {
+                status.textContent = 'Analysis failed: ' + error.message;
+            } finally {
+                processing = false;
+                document.getElementById('file-input').disabled = false;
+                document.getElementById('file-input').value = '';
+                document.getElementById('select-file-btn').disabled = false;
+            }
         }
 
         // Setup Event Listeners on load
         window.onload = () => {
             initCharts();
+            const notice = document.createElement('p');
+            notice.className = 'text-sm text-amber-700 mb-4';
+            notice.textContent = 'Demo analytics: summary cards and charts show sample data. Section 4 shows your uploaded capture analysis.';
+            document.querySelector('main').prepend(notice);
 
             const dropZone = document.getElementById('drop-zone');
             const fileInput = document.getElementById('file-input');
@@ -592,16 +631,16 @@
             // Click to upload
             selectBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                fileInput.click();
+                if (!processing) fileInput.click();
             });
 
             dropZone.addEventListener('click', () => {
-                fileInput.click();
+                if (!processing) fileInput.click();
             });
 
             fileInput.addEventListener('change', (e) => {
                 if (e.target.files.length > 0) {
-                    handleFileProcessing();
+                    handleFileProcessing(e.target.files[0]);
                 }
             });
 
@@ -620,14 +659,15 @@
                 e.preventDefault();
                 dropZone.classList.remove('drag-active');
                 if (e.dataTransfer.files.length > 0) {
-                    handleFileProcessing();
+                    handleFileProcessing(e.dataTransfer.files[0]);
                 }
             });
 
-            // Refresh button (resets to mock data for demo purposes)
-            refreshBtn.addEventListener('click', () => {
-                handleFileProcessing();
-            });
+            refreshBtn.title = 'Refresh demo charts';
+            refreshBtn.addEventListener('click', () => updateChartsWithData(mockData));
+            updateChartsWithData(mockData);
+            document.getElementById('fit-graph').addEventListener('click', () => graph && graph.fit(undefined, 35));
+            document.getElementById('reset-graph').addEventListener('click', () => graph && graph.layout(graphLayout()).run());
             
             // Initial animation keyframes for progress bar
             const style = document.createElement('style');
