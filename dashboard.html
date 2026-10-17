@@ -330,15 +330,17 @@
                     <!-- 4. Data Processing Flow -->
                     <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex-1">
                         <h2 class="text-lg font-semibold text-gray-800 mb-4">4. Data Processing Flow</h2>
-                        <div class="flex gap-3 mb-3 text-sm">
+                        <div class="flex flex-wrap gap-2 mb-3 text-sm">
+                            <button id="zoom-in" class="border rounded px-3 py-1 font-semibold" aria-label="Zoom in" title="Zoom in" disabled>+</button>
+                            <button id="zoom-out" class="border rounded px-3 py-1 font-semibold" aria-label="Zoom out" title="Zoom out" disabled>−</button>
                             <button id="fit-graph" class="border rounded px-3 py-1" disabled>Fit to view</button>
                             <button id="reset-graph" class="border rounded px-3 py-1" disabled>Reset layout</button>
                         </div>
-                        <p class="text-xs text-gray-500 mb-2">Zoom with the mouse wheel · Drag the background to pan · Drag nodes · Click to inspect</p>
-                        <p class="text-xs mb-3">🔵 Host · 🟦 Server · 🟢 Domain · 🟣 Activity</p>
+                        <p class="text-xs text-gray-500 mb-2">Use + / − or the mouse wheel to zoom · Drag to pan or move nodes · Click a connection to show its label and evidence</p>
+                        <p class="text-xs mb-3">🔵 Host (circle) · 🟦 Server · 🟢 Domain · 🟣 Activity</p>
                         <p id="graph-status" role="status" aria-live="polite" class="text-sm mb-2">Upload a capture to generate its flowchart.</p>
                         <ul id="graph-warnings" class="text-xs text-amber-700 list-disc pl-4 mb-2"></ul>
-                        <div id="flow-graph" style="height:480px; min-height:320px" class="border rounded-xl bg-gray-50" aria-label="Interactive capture flowchart"></div>
+                        <div id="flow-graph" style="height:640px; min-height:400px" class="border rounded-xl bg-gray-50" aria-label="Interactive capture flowchart"></div>
                         <div id="graph-details" class="mt-3 border rounded-lg p-3 text-sm break-words" aria-live="polite">Select a node or connection to inspect its evidence.</div>
                     </section>
 
@@ -509,7 +511,22 @@
         let graph = null;
         let graphResult = null;
         let processing = false;
-        const graphLayout = () => ({ name: 'cose', animate: false, randomize: true, padding: 35 });
+        const graphLayout = () => ({
+            name: 'concentric', animate: false, padding: 30,
+            concentric: node => node.data('type') === 'host' ? 2 : 1,
+            levelWidth: () => 1, minNodeSpacing: 35,
+            avoidOverlap: true, equidistant: true,
+            startAngle: -Math.PI / 2,
+            nodeDimensionsIncludeLabels: true
+        });
+
+        function zoomGraph(factor) {
+            if (!graph) return;
+            graph.zoom({
+                level: Math.max(graph.minZoom(), Math.min(graph.maxZoom(), graph.zoom() * factor)),
+                renderedPosition: { x: graph.width() / 2, y: graph.height() / 2 }
+            });
+        }
 
         function showDetails(element) {
             const panel = document.getElementById('graph-details');
@@ -550,20 +567,40 @@
             graph = cytoscape({
                 container: document.getElementById('flow-graph'),
                 elements: [
-                    ...result.nodes.map(node => ({ data: { ...node.data, id: node.id, label: node.label, type: node.type } })),
+                    ...result.nodes.map(node => ({ data: { ...node.data, id: node.id, label: node.label, displayLabel: node.label.replace(/\./g, '.\u200b'), type: node.type } })),
                     ...result.edges.map(edge => ({ data: { ...edge.data, id: edge.id, source: edge.source, target: edge.target, label: edge.label, type: edge.type } }))
                 ],
                 style: [
-                    { selector: 'node', style: { 'label': 'data(label)', 'background-color': '#2563eb', 'color': '#334155', 'font-size': 11, 'text-wrap': 'wrap', 'text-max-width': 140, 'text-valign': 'bottom', 'text-margin-y': 7, 'width': 35, 'height': 35 } },
-                    { selector: 'node[type="server"]', style: { 'shape': 'roundrectangle', 'background-color': '#0ea5e9' } },
-                    { selector: 'node[type="domain"]', style: { 'shape': 'diamond', 'background-color': '#10b981' } },
-                    { selector: 'node[type="activity"]', style: { 'shape': 'roundrectangle', 'background-color': '#8b5cf6', 'width': 55 } },
-                    { selector: 'edge', style: { 'width': 1.5, 'line-color': '#94a3b8', 'target-arrow-color': '#94a3b8', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'label': 'data(label)', 'font-size': 8, 'text-rotation': 'autorotate', 'text-background-color': '#ffffff', 'text-background-opacity': 0.85 } },
-                    { selector: ':selected', style: { 'border-width': 3, 'border-color': '#f59e0b', 'line-color': '#f59e0b', 'target-arrow-color': '#f59e0b' } }
+                    { selector: 'node', style: {
+                        'label': 'data(displayLabel)', 'background-color': '#1d4ed8',
+                        'color': '#ffffff', 'font-size': 13, 'font-weight': 600,
+                        'text-wrap': 'wrap', 'text-max-width': 130,
+                        'text-valign': 'center', 'text-halign': 'center',
+                        'width': 160, 'height': 110, 'border-width': 2,
+                        'border-color': '#ffffff', 'line-height': 1.35
+                    } },
+                    { selector: 'node[type="server"]', style: { 'shape': 'roundrectangle', 'background-color': '#0369a1', 'width': 175, 'height': 72, 'text-max-width': 150 } },
+                    { selector: 'node[type="domain"]', style: { 'shape': 'roundrectangle', 'background-color': '#047857', 'width': 210, 'height': 88, 'text-max-width': 180 } },
+                    { selector: 'node[type="activity"]', style: { 'shape': 'roundrectangle', 'background-color': '#6d28d9', 'width': 195, 'height': 95, 'text-max-width': 165 } },
+                    { selector: 'edge', style: {
+                        'width': 1.5, 'line-color': '#cbd5e1', 'target-arrow-color': '#94a3b8',
+                        'target-arrow-shape': 'triangle', 'curve-style': 'bezier',
+                        'label': '', 'arrow-scale': 0.9
+                    } },
+                    { selector: 'node:selected', style: { 'border-width': 4, 'border-color': '#f59e0b' } },
+                    { selector: 'edge:selected', style: {
+                        'width': 3, 'line-color': '#d97706', 'target-arrow-color': '#d97706',
+                        'label': 'data(label)', 'font-size': 12, 'color': '#92400e',
+                        'text-rotation': 'autorotate', 'text-background-color': '#fffbeb',
+                        'text-background-opacity': 1, 'text-background-padding': 4,
+                        'text-border-width': 1, 'text-border-color': '#fcd34d', 'text-border-opacity': 1
+                    } }
                 ],
                 layout: graphLayout(), minZoom: 0.05, maxZoom: 5
             });
             graph.on('tap', 'node, edge', event => showDetails(event.target));
+            document.getElementById('zoom-in').disabled = result.nodes.length === 0;
+            document.getElementById('zoom-out').disabled = result.nodes.length === 0;
             document.getElementById('fit-graph').disabled = result.nodes.length === 0;
             document.getElementById('reset-graph').disabled = result.nodes.length === 0;
         }
@@ -582,6 +619,8 @@
             processing = true;
             document.getElementById('file-input').disabled = true;
             document.getElementById('select-file-btn').disabled = true;
+            document.getElementById('zoom-in').disabled = true;
+            document.getElementById('zoom-out').disabled = true;
             document.getElementById('fit-graph').disabled = true;
             document.getElementById('reset-graph').disabled = true;
             if (graph) { graph.destroy(); graph = null; }
@@ -666,6 +705,8 @@
             refreshBtn.title = 'Refresh demo charts';
             refreshBtn.addEventListener('click', () => updateChartsWithData(mockData));
             updateChartsWithData(mockData);
+            document.getElementById('zoom-in').addEventListener('click', () => zoomGraph(1.25));
+            document.getElementById('zoom-out').addEventListener('click', () => zoomGraph(0.8));
             document.getElementById('fit-graph').addEventListener('click', () => graph && graph.fit(undefined, 35));
             document.getElementById('reset-graph').addEventListener('click', () => graph && graph.layout(graphLayout()).run());
             
