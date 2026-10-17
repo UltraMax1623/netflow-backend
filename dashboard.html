@@ -331,7 +331,12 @@
                     <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex-1">
                         <h2 class="text-lg font-semibold text-gray-800 mb-4">4. Data Processing Flow</h2>
                         <p class="text-xs text-gray-500 mb-2">Drag the background to pan, drag nodes to rearrange, or click for details. Mouse-wheel zoom is off by default; + / − always work.</p>
-                        <p class="text-xs mb-3">🔵 Host (circle) · 🟦 Server · 🟢 Domain · 🟣 Activity</p>
+                        <div class="flex flex-wrap gap-4 text-xs mb-3 text-slate-600" aria-label="Graph legend">
+                            <span><i class="fa-solid fa-laptop mr-1 text-blue-600" aria-hidden="true"></i> Host</span>
+                            <span><i class="fa-solid fa-globe mr-1 text-teal-700" aria-hidden="true"></i> Domain</span>
+                            <span><i class="fa-solid fa-server mr-1 text-teal-700" aria-hidden="true"></i> Server</span>
+                            <span><i class="fa-regular fa-file-lines mr-1 text-amber-600" aria-hidden="true"></i> Activity</span>
+                        </div>
                         <p id="graph-status" role="status" aria-live="polite" class="text-sm mb-2">Upload a capture to generate its flowchart.</p>
                         <ul id="graph-warnings" class="text-xs text-amber-700 list-disc pl-4 mb-2"></ul>
                         <div class="flex flex-wrap gap-2 mb-0 text-sm border border-b-0 rounded-t-xl bg-white p-2 items-center">
@@ -342,6 +347,7 @@
                             <label class="ml-auto flex items-center gap-2 text-xs cursor-pointer"><input id="wheel-zoom" type="checkbox"> Mouse-wheel zoom</label>
                         </div>
                         <div id="flow-graph" style="height:640px; min-height:400px" class="border rounded-b-xl bg-gray-50" aria-label="Interactive capture flowchart"></div>
+                        <p class="text-xs text-slate-500 mt-2">Solid blue: network evidence · Dashed gray: activity relationships. Arrows show relationships, not chronological steps.</p>
                         <div id="graph-details" class="mt-3 border rounded-lg p-3 text-sm break-words" aria-live="polite">Select a node or connection to inspect its evidence.</div>
                     </section>
 
@@ -574,7 +580,8 @@
             const activities = graphResult.activities.filter(activity => ids.has(activity.id));
             const metadata = document.createElement('pre');
             metadata.className = 'whitespace-pre-wrap text-xs mb-3';
-            metadata.textContent = JSON.stringify(element.data(), null, 2);
+            const { cardImage, displayLabel, ...detailsData } = element.data();
+            metadata.textContent = JSON.stringify(detailsData, null, 2);
             panel.appendChild(metadata);
             activities.forEach(activity => {
                 const details = document.createElement('details');
@@ -593,28 +600,49 @@
             });
         }
 
+        // Small inline SVG icons keep graph cards crisp without an icon-font
+        // dependency. Capture names stay in Cytoscape text, never inside SVG/HTML.
+        const graphCardIcons = {
+            host: '<rect x="4" y="4" width="24" height="18" rx="2"/><path d="M4 22 1 28h30l-3-6M12 25h8"/>',
+            domain: '<circle cx="16" cy="16" r="14"/><ellipse cx="16" cy="16" rx="6" ry="14"/><path d="M2 16h28M5 8h22M5 24h22"/>',
+            server: '<rect x="2" y="2" width="28" height="8" rx="2"/><rect x="2" y="12" width="28" height="8" rx="2"/><rect x="2" y="22" width="28" height="8" rx="2"/><path d="M7 6h10M7 16h10M7 26h10M24 6h1M24 16h1M24 26h1"/>',
+            activity: '<path d="M7 2h13l7 7v21H7zM20 2v8h7M12 15h10M12 20h10M12 25h6"/>'
+        };
+        function graphCardImage(kind) {
+            const color = kind === 'host' ? '#147dc2' : kind === 'activity' ? '#ca8a24' : '#147d89';
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="92" viewBox="0 0 240 92">
+                <g transform="translate(15 25)" fill="none" stroke="${color}" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round">${graphCardIcons[kind] || graphCardIcons.host}</g>
+                <text x="63" y="75" font-family="Arial,sans-serif" font-size="10" fill="#64748b" letter-spacing="1">${graphCardIcons[kind] ? kind.toUpperCase() : 'HOST'}</text>
+            </svg>`;
+            return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        }
+
         function renderGraph(result) {
             graphResult = result;
+            const activityIds = new Set(result.nodes.filter(node => node.type === 'activity').map(node => node.id));
             graph = cytoscape({
                 container: document.getElementById('flow-graph'),
                 elements: [
-                    ...result.nodes.map(node => ({ data: { ...node.data, id: node.id, label: node.label, displayLabel: node.label.replace(/\./g, '.\u200b'), type: node.type } })),
-                    ...result.edges.map(edge => ({ data: { ...edge.data, id: edge.id, source: edge.source, target: edge.target, label: edge.label, type: edge.type } }))
+                    ...result.nodes.map(node => ({ data: { ...node.data, id: node.id, label: node.label, displayLabel: node.label.replace(/\./g, '.\u200b'), type: node.type, cardImage: graphCardImage(node.type) } })),
+                    ...result.edges.map(edge => ({ classes: activityIds.has(edge.source) || activityIds.has(edge.target) ? 'activity-link' : 'network-link', data: { ...edge.data, id: edge.id, source: edge.source, target: edge.target, label: edge.label, type: edge.type } }))
                 ],
                 style: [
                     { selector: 'node', style: {
-                        'label': 'data(displayLabel)', 'background-color': '#1d4ed8',
-                        'color': '#ffffff', 'font-size': 14, 'font-weight': 600,
-                        'text-wrap': 'wrap', 'text-max-width': 130,
+                        'shape': 'roundrectangle', 'label': 'data(displayLabel)',
+                        'background-color': '#eaf5ff', 'border-color': '#147dc2',
+                        'background-image': 'data(cardImage)', 'background-width': '100%', 'background-height': '100%',
+                        'background-fit': 'contain', 'background-image-opacity': 1,
+                        'color': '#0f172a', 'font-size': 14, 'font-weight': 700,
+                        'text-wrap': 'wrap', 'text-max-width': 162,
                         'text-valign': 'center', 'text-halign': 'center',
-                        'width': 160, 'height': 110, 'border-width': 2,
-                        'border-color': '#ffffff', 'line-height': 1.35
+                        'text-margin-x': 24, 'text-margin-y': -8,
+                        'width': 240, 'height': 92, 'border-width': 2,
+                        'line-height': 1.3
                     } },
-                    { selector: 'node[type="server"]', style: { 'shape': 'roundrectangle', 'background-color': '#0369a1', 'width': 175, 'height': 72, 'text-max-width': 150 } },
-                    { selector: 'node[type="domain"]', style: { 'shape': 'roundrectangle', 'background-color': '#047857', 'width': 210, 'height': 88, 'text-max-width': 180 } },
-                    { selector: 'node[type="activity"]', style: { 'shape': 'roundrectangle', 'background-color': '#6d28d9', 'width': 195, 'height': 95, 'text-max-width': 165 } },
+                    { selector: 'node[type="server"], node[type="domain"]', style: { 'background-color': '#eaf7f6', 'border-color': '#147d89' } },
+                    { selector: 'node[type="activity"]', style: { 'background-color': '#fff7e5', 'border-color': '#dfa43b' } },
                     { selector: 'edge', style: {
-                        'width': 1.5, 'line-color': '#cbd5e1', 'target-arrow-color': '#94a3b8',
+                        'width': 2, 'line-color': '#2385c7', 'target-arrow-color': '#2385c7',
                         'target-arrow-shape': 'triangle', 'curve-style': 'bezier',
                         'label': 'data(label)', 'arrow-scale': 0.9,
                         'font-size': 11, 'color': '#475569', 'text-rotation': 'autorotate',
@@ -622,6 +650,7 @@
                         'text-background-color': '#f8fafc', 'text-background-opacity': 0.95,
                         'text-background-padding': 2
                     } },
+                    { selector: 'edge.activity-link', style: { 'line-style': 'dashed', 'line-color': '#94a3b8', 'target-arrow-color': '#94a3b8', 'color': '#64748b', 'width': 1.5 } },
                     { selector: 'node:selected', style: { 'border-width': 4, 'border-color': '#f59e0b' } },
                     { selector: 'edge:selected', style: {
                         'width': 3, 'line-color': '#d97706', 'target-arrow-color': '#d97706',
