@@ -160,6 +160,17 @@
                             </button>
                             <p class="text-xs text-gray-400 mt-3">Max 500MB</p>
                         </div>
+                        <div id="uploaded-file-card" class="mt-4" hidden>
+                            <div class="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                                <svg class="shrink-0 text-blue-600 mt-1" width="32" height="36" viewBox="0 0 32 36" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 2h13l7 7v25H6zM19 2v8h7M11 17h10M11 23h10M11 29h6"/></svg>
+                                <div class="min-w-0 flex-1">
+                                    <p id="uploaded-file-name" class="text-sm font-semibold text-slate-800 break-words"></p>
+                                    <p id="uploaded-file-size" class="text-xs text-slate-500 mt-1"></p>
+                                    <p id="uploaded-file-status" role="status" aria-live="polite" class="text-sm text-blue-700 mt-2 break-words"></p>
+                                </div>
+                                <button id="remove-upload" type="button" class="shrink-0 rounded p-1 text-xl leading-none text-slate-500 hover:text-red-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Remove uploaded file" title="Remove uploaded file">×</button>
+                            </div>
+                        </div>
                     </section>
 
                     <!-- 2. Protocol Matrix -->
@@ -671,18 +682,56 @@
             document.getElementById('reset-graph').disabled = result.nodes.length === 0;
         }
 
+        function updateUploadCard(file, state, message) {
+            const card = document.getElementById('uploaded-file-card');
+            card.hidden = false;
+            document.getElementById('uploaded-file-name').textContent = file.name;
+            document.getElementById('uploaded-file-name').title = file.name;
+            document.getElementById('uploaded-file-size').textContent = file.size >= 1024 * 1024
+                ? (file.size / (1024 * 1024)).toFixed(2) + ' MB'
+                : file.size >= 1024 ? (file.size / 1024).toFixed(1) + ' KB' : file.size + ' bytes';
+            const status = document.getElementById('uploaded-file-status');
+            status.textContent = message;
+            status.className = 'text-sm mt-2 break-words ' + (
+                state === 'success' ? 'text-emerald-700' : state === 'error' ? 'text-red-700' : 'text-blue-700');
+            document.getElementById('remove-upload').disabled = state === 'processing';
+            card.dataset.state = state;
+            card.setAttribute('aria-busy', state === 'processing' ? 'true' : 'false');
+            document.getElementById('select-file-btn').textContent = 'Choose another file';
+        }
+
+        function removeUpload() {
+            if (processing) return;
+            document.getElementById('uploaded-file-card').hidden = true;
+            document.getElementById('uploaded-file-name').textContent = '';
+            document.getElementById('uploaded-file-size').textContent = '';
+            document.getElementById('uploaded-file-status').textContent = '';
+            document.getElementById('file-input').value = '';
+            document.getElementById('select-file-btn').textContent = 'Select File';
+            if (graph) { graph.destroy(); graph = null; }
+            graphResult = null;
+            document.getElementById('graph-status').textContent = 'Upload a capture to generate its flowchart.';
+            document.getElementById('graph-warnings').replaceChildren();
+            document.getElementById('graph-details').textContent = 'Select a node or connection to inspect its evidence.';
+            ['zoom-in', 'zoom-out', 'fit-graph', 'reset-graph'].forEach(id => document.getElementById(id).disabled = true);
+            document.getElementById('select-file-btn').focus();
+        }
+
         async function handleFileProcessing(file) {
             if (processing || !file) return;
             const status = document.getElementById('graph-status');
             if (file.size > 500 * 1024 * 1024) {
                 status.textContent = 'Capture exceeds the 500 MB upload limit.';
+                updateUploadCard(file, 'error', status.textContent);
                 return;
             }
             if (!/\.(pcap|pcapng|cap)$/i.test(file.name)) {
                 status.textContent = 'Please select a .pcap, .pcapng, or .cap capture.';
+                updateUploadCard(file, 'error', status.textContent);
                 return;
             }
             processing = true;
+            updateUploadCard(file, 'processing', 'Uploading and analyzing…');
             document.getElementById('file-input').disabled = true;
             document.getElementById('select-file-btn').disabled = true;
             document.getElementById('zoom-in').disabled = true;
@@ -705,6 +754,7 @@
                 status.textContent = result.nodes.length
                     ? file.name + ': ' + result.summary.activity_count + ' activities, ' + result.nodes.length + ' nodes, ' + result.edges.length + ' connections.'
                     : 'Analysis completed. No supported connections were found in this capture.';
+                updateUploadCard(file, 'success', result.nodes.length ? 'Uploaded · Analysis complete' : 'Uploaded · Analysis complete — no supported connections found');
                 (result.summary.warnings || []).forEach(warning => {
                     const item = document.createElement('li');
                     item.textContent = warning;
@@ -712,6 +762,7 @@
                 });
             } catch (error) {
                 status.textContent = 'Analysis failed: ' + error.message;
+                updateUploadCard(file, 'error', status.textContent);
             } finally {
                 processing = false;
                 document.getElementById('file-input').disabled = false;
@@ -728,6 +779,7 @@
             notice.textContent = 'Demo analytics: summary cards and charts show sample data. Section 4 shows your uploaded capture analysis.';
             document.querySelector('main').prepend(notice);
 
+            document.getElementById('remove-upload').addEventListener('click', removeUpload);
             const dropZone = document.getElementById('drop-zone');
             const fileInput = document.getElementById('file-input');
             const selectBtn = document.getElementById('select-file-btn');
