@@ -1,8 +1,8 @@
 # PCAP story analysis package
 
-This new package is independent of the existing FastAPI backend. Existing files,
-including `main.py`, `requirements.txt`, and `dashboard.html`, are unchanged.
-The package itself uses Python's standard library only (Python 3.10+).
+The analysis package is integrated with the FastAPI backend and dashboard.
+The offline analysis pipeline uses Python's standard library (Python 3.10+);
+the live capture adapter also uses FastAPI for HTTP errors.
 
 ## Public interface
 
@@ -190,3 +190,51 @@ POST /api/flowchart accepts multipart field file and returns summary, activities
 Zoom with the mouse wheel, pan by dragging the background, drag nodes, and click nodes/connections for activity details and evidence. Fit and reset-layout controls restore the view. Warnings include empty results and graph truncation (100 activities by default); the response retains all activities. No capture history is saved.
 
 Tests: install httpx, then run `python -m unittest discover -s tests -v`.
+
+## Live network capture
+
+For installation, startup, and a real capture smoke test on Ubuntu, see
+[UBUNTU_SETUP.md](UBUNTU_SETUP.md).
+
+The dashboard supports repeated, bounded captures from the **server machine's**
+network adapter. Run one server worker and open `http://127.0.0.1:8000`.
+Click **Refresh adapters**, select Wi-Fi/Ethernet, optionally enter a BPF capture
+filter such as `tcp or udp`, then click **Start live capture**. Section 4 shows
+the latest real flowchart. Other charts remain explicitly labeled demo data.
+
+On Windows, install Wireshark with Npcap and grant the current account capture
+permissions. The backend finds dumpcap on PATH or in the standard
+`C:\Program Files\Wireshark` directory. For another installation location:
+
+```powershell
+$env:PCAP_DUMPCAP_BINARY = 'C:\Program Files\Wireshark\dumpcap.exe'
+$env:PCAP_ZEEK_RUNTIME = 'wsl'
+$env:PCAP_ZEEK_DISTRIBUTION = 'Ubuntu'
+# Zeek must already be installed in this distribution.
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+Linux/macOS use native dumpcap with capture permissions and native Zeek.
+Adapter capture happens on the host even when Zeek runs inside WSL.
+See the [official dumpcap manual](https://www.wireshark.org/docs/man-pages/dumpcap.html)
+for installation-specific capture options and filters.
+
+`GET /api/live/interfaces` lists adapters; `POST /api/live/capture` accepts
+`{"interface":"<adapter id>","seconds":10,"capture_filter":""}`. Both endpoints
+require a loopback client and localhost/loopback Host; browser requests must be
+same-origin. Keep this application bound to loopback, without a public reverse
+proxy. Only one live request runs at a time per server process.
+
+Each window lasts 5–60 seconds (default 10), stopping earlier at 25 MB or
+100,000 packets. Capture and Zeek files are temporary and cleaned on success or
+failure. Capture errors are displayed, including missing dependencies,
+permissions, invalid filters, and timeouts. Local checksum offload is handled
+by disabling Zeek checksum validation for live windows.
+
+This is **windowed live analysis**, not a lossless continuous monitor. Capture
+pauses while Zeek analyzes the previous window. The graph replaces the previous
+window; DNS context and connections spanning windows may be incomplete.
+**Stop after this window** waits for capture and analysis to finish. Closing
+the page prevents subsequent windows; the current server request can finish
+within the capture and configured Zeek timeouts. There is no capture history.
+The adapter only sees traffic available to it, not every device on the network.

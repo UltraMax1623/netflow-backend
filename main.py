@@ -5,12 +5,14 @@ import subprocess
 import tempfile
 from pathlib import Path
 from collections import Counter
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Depends
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 import dpkt
 from pcap_story import AnalysisConfig, ZeekError, get_flowchart
+from pcap_story.live_capture import capture_window, list_interfaces
 
 app = FastAPI(title="NetFlow Analyzer API")
 
@@ -20,7 +22,7 @@ def dashboard():
     return FileResponse(Path(__file__).with_name("dashboard.html"))
 
 
-def analyze_upload(file):
+def analyze_upload(file, ignore_checksums=False):
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in {".pcap", ".pcapng", ".cap"}:
         raise HTTPException(400, "Upload a .pcap, .pcapng, or .cap capture.")
@@ -30,6 +32,7 @@ def analyze_upload(file):
             wsl_distribution=os.getenv("PCAP_ZEEK_DISTRIBUTION") or None,
             zeek_binary=os.getenv("PCAP_ZEEK_BINARY", "zeek"),
             timeout_seconds=float(os.getenv("PCAP_ZEEK_TIMEOUT", "600")),
+            ignore_checksums=ignore_checksums,
         )
     except ValueError as exc:
         raise HTTPException(503, "Invalid server Zeek configuration.") from exc
@@ -64,6 +67,45 @@ async def flowchart(file: UploadFile = File(...)):
         return await run_in_threadpool(analyze_upload, file)
     finally:
         await file.close()
+
+
+def require_local_capture(request: Request):
+    """Capture controls are available only to a local, same-origin dashboard."""
+    allowed = {"127.0.0.1", "::1", "localhost"}
+    if not request.client or request.client.host not in allowed:
+        raise HTTPException(403, "Live capture is available only on the server's local machine.")
+    if request.url.hostname not in allowed:
+        raise HTTPException(403, "Open the dashboard through localhost or 127.0.0.1.")
+    origin = request.headers.get("origin")
+    if origin and origin != f"{request.url.scheme}://{request.url.netloc}":
+        raise HTTPException(403, "Live capture requires a same-origin request.")
+
+
+class LiveCaptureRequest(BaseModel):
+    interface: str = Field(min_length=1, max_length=512)
+    seconds: int = Field(default=10, ge=5, le=60, strict=True)
+    capture_filter: str = Field(default="", max_length=512, pattern=r"^[^\x00\r\n]*$")
+
+
+@app.get("/api/live/interfaces", dependencies=[Depends(require_local_capture)])
+def live_interfaces():
+    return {"interfaces": list_interfaces()}
+
+
+@app.post("/api/live/capture", dependencies=[Depends(require_local_capture)])
+def live_capture(options: LiveCaptureRequest):
+    with capture_window(options.interface, options.seconds, options.capture_filter) as path:
+        with path.open("rb") as source:
+            result = analyze_upload(UploadFile(filename="live.pcap", file=source), ignore_checksums=True)
+        result["summary"]["capture_mode"] = "live_window"
+        result["summary"]["interface"] = options.interface
+        result["summary"]["warnings"].append(
+            "Latest capture window only; traffic during analysis is not captured. "
+            "Connections spanning windows may have incomplete evidence. "
+            "Each window stops at its duration, 25 MB, or 100,000 packets. "
+            "Checksum validation is disabled for local adapter offload."
+        )
+        return result
 
 # Allow requests from your frontend
 app.add_middleware(
