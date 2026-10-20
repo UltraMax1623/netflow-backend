@@ -81,9 +81,16 @@ result = get_flowchart(
 Official Zeek command/log documentation:
 https://docs.zeek.org/en/current/tutorial/logs.html
 
-## Output contract, version 1.0
+## Output contract, version 1.1
 
 Top-level keys:
+
+- `connections`: one record per normalized Zeek connection, with its counters
+  and a domain only when TLS/HTTP evidence identifies one unambiguous domain.
+  `observed_domains` retains all observed names. The dashboard aggregates these
+  records by initiator and domain (or server IP), without counting a connection twice.
+  The HTTP API also adds `analytics`: independent frame statistics, bounded
+  timeline charts, TCP handshake counters, and security indicators.
 
 - `summary`: capture name, observed start/end/duration, counts, directional
   connection bytes, graph truncation, tool diagnostics, and warnings.
@@ -137,8 +144,8 @@ from UDP port 443 alone.
 `connection_packet_count` sums Zeek originator/responder packet counters when
 all are available. Byte counters are Zeek connection payload metrics, not PCAP
 file size or whole-frame totals. `duration` spans observed supported records.
-`dpkt` can be added later for independent capture-wide statistics and packet
-references without double-counting Zeek flows.
+The HTTP API now adds independent `dpkt` capture-wide frame statistics under
+`analytics`, without double-counting Zeek flows.
 
 Log files are read line by line, but normalized records and the full activity
 story remain in memory. This version is not a bounded-memory, multi-gigabyte
@@ -171,7 +178,7 @@ for running an actual capture through an installed Zeek runtime.
 
 ## Interactive website
 
-Run `python -m pip install -r requirements.txt`, then `python -m uvicorn main:app --reload` from the repository root. Open http://127.0.0.1:8000 and upload a .pcap, .pcapng, or .cap capture. Section 4 shows real analysis; other analytics are labeled demo data. Internet access is required for the pinned Cytoscape 3.30.4 and existing styling/chart CDNs.
+Run `python -m pip install -r requirements.txt`, then `python -m uvicorn main:app --reload` from the repository root. Open http://127.0.0.1:8000 and upload a .pcap, .pcapng, or .cap capture. All charts and protocol counters use the current capture. Internet access is required for the pinned Cytoscape 3.30.4 and existing styling/chart CDNs.
 
 For Windows, install WSL and Zeek in a Linux distribution first. Check `wsl --distribution Ubuntu --exec zeek --version`, then configure the server:
 
@@ -200,7 +207,8 @@ The dashboard supports repeated, bounded captures from the **server machine's**
 network adapter. Run one server worker and open `http://127.0.0.1:8000`.
 Click **Refresh adapters**, select Wi-Fi/Ethernet, optionally enter a BPF capture
 filter such as `tcp or udp`, then click **Start live capture**. Section 4 shows
-the latest real flowchart. Other charts remain explicitly labeled demo data.
+the latest real flowchart. All charts, counters and security findings update
+from the same capture window.
 
 On Windows, install Wireshark with Npcap and grant the current account capture
 permissions. The backend finds dumpcap on PATH or in the standard
@@ -238,3 +246,68 @@ window; DNS context and connections spanning windows may be incomplete.
 the page prevents subsequent windows; the current server request can finish
 within the capture and configured Zeek timeouts. There is no capture history.
 The adapter only sees traffic available to it, not every device on the network.
+
+## Dashboard and security assessment
+
+The two-column dashboard retains its protocol cards and device/globe/server
+icons. Sidebar entries link to Analysis, Reports, Settings and Help. Reports
+export a readable text summary or the complete JSON evidence. Nothing is saved
+on the server after analysis.
+
+The main graph hides generic activity boxes, combines repeated connections by
+client/domain or client/server, and provides client, domain/IP/service, and
+DNS-only filters. It draws at most 40/80/150 connection groups (80 by default),
+with an explicit displayed/total count. The full analysis remains exportable.
+Large graphs start at a readable scale with pan/zoom; Fit provides an overview.
+The graph and details panel have bounded dimensions. Raw JSON is available only
+inside an optional details toggle.
+
+Eight real charts show throughput, protocol counts, packet share, packet sizes,
+packet/SYN/ICMP rates, top destinations, TCP handshakes and top sources.
+Frame bytes are captured lengths, not necessarily wire lengths when snaplen
+truncates frames; Zeek connection bytes are payload counters and differ.
+Timeline bins are at least one second and grow to keep at most 121 points.
+Average PPS uses total packets / observed duration; zero-duration captures
+report an unavailable average instead of dividing by zero.
+
+Security checks are investigation heuristics, **not confirmed attack verdicts**:
+
+- Packet/ICMP rate thresholds flag unusually high volume. A configured normal
+  PPS baseline also requires a 3× increase. No automatic baseline is learned.
+- TCP handshake completion uses completed observed three-way handshakes divided
+  by distinct SYN attempts. Retransmitted SYNs are counted in traffic totals
+  but deduplicated for completion. Missing replies and window boundaries matter.
+- ARP changes flag conflicting IP/MAC mappings. A configured gateway IP/MAC
+  baseline supports a stronger gateway mismatch warning.
+- Visible UDP DNS is matched by client, port, transaction ID and question for
+  10 seconds. Conflicting answer sets or unexpected reply sources are review
+  items. Identical retransmissions and TTL changes alone are not flagged.
+- A complete plaintext HTTP request carrying an HTTPS referrer is a downgrade
+  lead. Encrypted redirects and TLS stripping cannot be confirmed here.
+- Bursts of distinct connections to port 22 are possible brute-force leads.
+  Failed passwords, usernames, and a successful login require authentication logs.
+
+Red indicates a high-priority heuristic or an explicitly labeled processing
+error. Amber indicates review items or incomplete decode coverage. Green means
+no configured indicators were found, **not a clean bill of health**. Empty
+captures remain neutral. Settings affect the next upload or live session.
+API callers can pass JSON in multipart `settings`, or a `settings` object in
+the live capture request. Defaults and the applied settings are in each report.
+
+Limitations: no TCP/IP reassembly in packet checks, no decryption, no learned
+baseline or persistent live-window history. Detector state is capped at 100,000
+entries per state table; reaching the limit is reported. The Zeek pipeline still
+retains normalized logs in memory. Packet-level analytics support Ethernet,
+Linux cooked v1/v2, raw IP and loopback frames. Unsupported link types and
+malformed frames produce coverage warnings.
+
+Validation:
+
+```text
+python -m unittest discover -s tests -v
+node tests/test_dashboard.js
+python tests/browser_dashboard.py
+```
+
+Browser checks require Playwright plus Chromium/Edge and CDN access; they use
+synthetic API responses to verify the UI, not real adapter capture.

@@ -12,6 +12,11 @@ import threading
 from fastapi import HTTPException
 
 _capture_lock = threading.Lock()
+_phase = "idle"
+
+
+def capture_status():
+    return {"phase": _phase}
 
 
 def dumpcap_binary():
@@ -56,9 +61,11 @@ def list_interfaces(binary=None):
 
 @contextmanager
 def capture_window(interface, seconds, capture_filter):
+    global _phase
     if not _capture_lock.acquire(blocking=False):
         raise HTTPException(409, "Another live capture is already running.")
     try:
+        _phase = "preparing"
         binary = dumpcap_binary()
         if interface not in {item["id"] for item in list_interfaces(binary)}:
             raise HTTPException(400, "Adapter is unavailable. Refresh the adapter list.")
@@ -71,9 +78,12 @@ def capture_window(interface, seconds, capture_filter):
             ]
             if capture_filter:
                 command += ["-f", capture_filter]
+            _phase = "capturing"
             _run(command, seconds + 15)
             if not path.is_file():
                 raise HTTPException(502, "Capture tool did not produce a capture file.")
+            _phase = "analyzing"
             yield path
     finally:
+        _phase = "idle"
         _capture_lock.release()

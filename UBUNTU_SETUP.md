@@ -1,5 +1,31 @@
 # Run NetFlow Analyzer on Ubuntu
 
+## Recommended launcher (Ubuntu 22.04 / 24.04 / 26.04)
+
+From your checkout:
+
+```bash
+git pull --ff-only
+bash run-ubuntu.sh
+```
+
+The launcher installs missing dependencies, uses `util-linux-extra` for `sg`,
+configures capture group permissions, reuses an existing Zeek installation
+(including Zeek 9), creates `.venv`, and opens the dashboard in your default
+browser after startup. Your browser controls whether that opens a tab or window.
+It asks for sudo only when system setup is needed; the web server runs as your
+regular user. Clean `main` checkouts are updated with a fast-forward pull;
+checkouts with local edits are run without pulling.
+Keep the terminal open; Ctrl+C stops the server. On a headless Ubuntu server,
+open the printed URL through an SSH tunnel as described below.
+
+If Zeek packages are present but unusable, the launcher stops with a diagnostic
+instead of installing a conflicting release train. `PCAP_ZEEK_BINARY` and
+`PCAP_DUMPCAP_BINARY` can override the native executable paths.
+
+The manual instructions below are for a **fresh Ubuntu 24.04 installation**.
+If Zeek is already installed and working, skip step 2.
+
 These commands target **Ubuntu 24.04 LTS**, with Python 3.12. For another Ubuntu
 release, use its matching repository from the
 [official Zeek package instructions](https://github.com/zeek/zeek/wiki/Binary-Packages).
@@ -107,7 +133,7 @@ the installation verified.
 
 ## Current limits
 
-- Section 4 uses real capture data; the other charts still use labeled demo data.
+- All charts, the graph and the assessment use the current capture's real data.
 - Capture pauses during analysis. The graph shows only the most recent window.
 - Stop waits for the current capture and analysis; it is not immediate.
 - Capture windows stop after their duration, 25 MB, or 100,000 packets.

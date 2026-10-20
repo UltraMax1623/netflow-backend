@@ -64,7 +64,9 @@ class PipelineTests(unittest.TestCase):
                  protocol_record(video, server_name="r1.googlevideo.com", version="TLSv13")],
         )
         json.dumps(result, allow_nan=False)
-        self.assertEqual(set(result), {"summary", "activities", "nodes", "edges"})
+        self.assertEqual(set(result), {"summary", "activities", "nodes", "edges", "connections"})
+        self.assertEqual(len(result["connections"]), 2)
+        self.assertEqual(result["connections"][0]["domain"], "www.youtube.com")
         streaming = [item for item in result["activities"] if item["type"] == "possible_streaming"]
         self.assertEqual(len(streaming), 1)
         self.assertEqual(streaming[0]["statistics"]["bytes_received"], 1000 + 60 * 1024 * 1024)

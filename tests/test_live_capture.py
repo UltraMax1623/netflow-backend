@@ -43,6 +43,7 @@ class LiveCaptureTests(unittest.TestCase):
         paths = []
 
         def capture(command, timeout):
+            self.assertEqual(live.capture_status()["phase"], "capturing")
             path = Path(command[command.index("-w") + 1])
             paths.append(path)
             self.assertIn("duration:5", command)
@@ -52,7 +53,8 @@ class LiveCaptureTests(unittest.TestCase):
             self.assertEqual(timeout, 20)
             path.write_bytes(b"capture")
 
-        def analyze(file, ignore_checksums):
+        def analyze(file, ignore_checksums, thresholds):
+            self.assertEqual(live.capture_status()["phase"], "analyzing")
             self.assertTrue(ignore_checksums)
             self.assertEqual(file.file.read(), b"capture")
             return {"summary": {"warnings": []}, "nodes": [], "edges": [], "activities": []}
@@ -66,6 +68,7 @@ class LiveCaptureTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["summary"]["capture_mode"], "live_window")
         self.assertFalse(paths[0].parent.exists())
+        self.assertEqual(self.client.get("/api/live/status").json(), {"phase": "idle"})
 
     def test_invalid_adapter_and_busy(self):
         with patch.object(live, "dumpcap_binary", return_value="dumpcap"), \

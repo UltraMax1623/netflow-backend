@@ -21,6 +21,25 @@ class FlowchartApiTests(unittest.TestCase):
         response = self.client.get('/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('flow-graph', response.text)
+        self.assertEqual(self.client.get('/dashboard-ui.js').status_code, 200)
+
+    def test_capture_analytics_and_settings(self):
+        from io import BytesIO
+        import dpkt
+        output = BytesIO()
+        writer = dpkt.pcap.Writer(output)
+        writer.writepkt(bytes(dpkt.ethernet.Ethernet(type=0x806, data=dpkt.arp.ARP())), ts=1)
+        with patch('main.get_flowchart', return_value={'summary': {}, 'activities': [], 'nodes': [], 'edges': []}):
+            response = self.client.post('/api/flowchart', files={'file': ('arp.pcap', output.getvalue())},
+                                        data={'settings': '{"pps_threshold":500}'})
+        self.assertEqual(response.status_code, 200)
+        result = response.json()['analytics']
+        self.assertEqual(result['summary']['total_packets'], 1)
+        self.assertEqual(result['protocols']['ARP'], 1)
+        self.assertEqual(result['security']['thresholds']['pps_threshold'], 500)
+        response = self.client.post('/api/flowchart', files={'file': ('arp.pcap', output.getvalue())},
+                                    data={'settings': '{"gateway_ip":"invalid"}'})
+        self.assertEqual(response.status_code, 422)
 
     def test_success_formats_configuration_and_cleanup(self):
         paths = []

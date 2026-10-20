@@ -1,6 +1,7 @@
 """Public orchestration API. Existing application routes need not be imported."""
 
 from pathlib import Path
+from dataclasses import asdict
 
 from .config import AnalysisConfig
 from .correlator import correlate
@@ -49,7 +50,7 @@ def _analyze_logs(directory, config, capture_name, warnings=()):
 
     sent_packets, received_packets = total("packets_sent"), total("packets_received")
     summary = {
-        "schema_version": "1.0", "pcap": capture_name, "analysis_tool": "zeek",
+        "schema_version": "1.1", "pcap": capture_name, "analysis_tool": "zeek",
         "start_time": min(starts) if starts else None, "end_time": max(ends) if ends else None,
         "duration": max(ends) - min(starts) if starts else 0,
         "packet_count": None,
@@ -65,7 +66,19 @@ def _analyze_logs(directory, config, capture_name, warnings=()):
         "graph_truncated": len(activities) > config.max_graph_activities,
         "time_basis": "UNIX seconds, UTC", "warnings": notes,
     }
-    return {"summary": summary, "activities": activities, "nodes": nodes, "edges": edges}
+    # Each connection appears once. Protocol observations, rather than DNS IP
+    # coincidence, supply its domain. This supports honest UI aggregation.
+    connection_domains = {}
+    for event in events:
+        if event.type in {"TLS_CONNECTION", "HTTP_REQUEST"} and event.data.get("domain"):
+            connection_domains.setdefault(event.uid, set()).add(event.data["domain"])
+    connections = []
+    for flow in flows:
+        domains = sorted(connection_domains.get(flow.uid, set()))
+        connections.append({**asdict(flow), "domain": domains[0] if len(domains) == 1 else None,
+                            "observed_domains": domains})
+    return {"summary": summary, "activities": activities, "nodes": nodes, "edges": edges,
+            "connections": connections}
 
 
 def get_flowchart(pcap_path, *, config: AnalysisConfig | None = None) -> dict:

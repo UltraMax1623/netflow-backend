@@ -1,0 +1,34 @@
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const context = vm.createContext({});
+vm.runInContext(fs.readFileSync('dashboard-ui.js', 'utf8'), context);
+const build = (connections, extra = {}, options = {}) => {
+    context.input = {connections, activities: [], ...extra};
+    context.options = {device: '', search: '', hideDNS: false, limit: 80, ...options};
+    return JSON.parse(vm.runInContext('JSON.stringify(buildDisplayGraph(input, options))', context));
+};
+const first = {id: 'a', source_ip: '10.0.0.1', destination_ip: '1.1.1.1', domain: 'example.com',
+    destination_port: 443, protocol: 'tcp', service: 'ssl', bytes_sent: 100, bytes_received: 200};
+let result = build([first, first, {...first, id: 'b', destination_ip: '2.2.2.2'}]);
+assert.equal(result.edges.length, 1);
+assert.match(result.edges[0].label, /2 connections/);
+assert.match(result.edges[0].label, /600 B/);
+assert.equal(result.nodes.length, 2);
+result = build([first, {...first, id: 'b', source_ip: '10.0.0.2'}]);
+assert.equal(result.edges.length, 2, 'Device traffic must stay separate');
+result = build([first, {...first, id: 'b', bytes_received: null}]);
+assert.match(result.edges[0].label, /Bytes incomplete/);
+result = build([first], {}, {device: '10.0.0.2'});
+assert.equal(result.edges.length, 0);
+result = build([first], {}, {search: 'EXAMPLE.COM'});
+assert.equal(result.edges.length, 1);
+const dns = {type: 'DNS_QUERY', id: 'dns1', source: {ip: '10.0.0.1'}, data: {domain: 'test.example'}};
+result = build([], {activities: [{evidence: [dns, dns]}]});
+assert.equal(result.edges[0].data.dns_count, 1);
+result = build([], {activities: [{evidence: [dns]}]}, {hideDNS: true});
+assert.equal(result.edges.length, 0);
+result = build(Array.from({length: 1000}, (_, i) => ({...first, id: String(i), domain: `site-${i}.example`})));
+assert.equal(result.edges.length, 80);
+assert.equal(result.total, 1000);
+console.log('Graph tests passed: deduplication, grouping, client isolation, unknown bytes, filters, DNS evidence, and size limits.');

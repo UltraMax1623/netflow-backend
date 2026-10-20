@@ -5,14 +5,15 @@ import subprocess
 import tempfile
 from pathlib import Path
 from collections import Counter
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 import dpkt
 from pcap_story import AnalysisConfig, ZeekError, get_flowchart
-from pcap_story.live_capture import capture_window, list_interfaces
+from pcap_story.live_capture import capture_window, list_interfaces, capture_status
+from pcap_story.packet_analytics import analyze_packets, SecuritySettings
 
 app = FastAPI(title="NetFlow Analyzer API")
 
@@ -22,7 +23,12 @@ def dashboard():
     return FileResponse(Path(__file__).with_name("dashboard.html"))
 
 
-def analyze_upload(file, ignore_checksums=False):
+@app.get("/dashboard-ui.js", include_in_schema=False)
+def dashboard_script():
+    return FileResponse(Path(__file__).with_name("dashboard-ui.js"), media_type="text/javascript")
+
+
+def analyze_upload(file, ignore_checksums=False, thresholds=None):
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in {".pcap", ".pcapng", ".cap"}:
         raise HTTPException(400, "Upload a .pcap, .pcapng, or .cap capture.")
@@ -47,6 +53,7 @@ def analyze_upload(file, ignore_checksums=False):
                         raise HTTPException(413, "Capture exceeds the 500 MB upload limit.")
                     destination.write(chunk)
             result = get_flowchart(capture, config=config)
+            result["analytics"] = analyze_packets(capture, thresholds)
             result["summary"]["pcap"] = (file.filename or "capture").replace("\\", "/").rsplit("/", 1)[-1]
             return result
     except ZeekError as exc:
@@ -55,16 +62,20 @@ def analyze_upload(file, ignore_checksums=False):
             503 if isinstance(cause, OSError) or "WSL" in str(exc) else 502
         )
         raise HTTPException(status, str(exc)) from exc
-    except ValueError as exc:
+    except (ValueError, dpkt.UnpackError) as exc:
         raise HTTPException(400, str(exc)) from exc
     except OSError as exc:
         raise HTTPException(500, "Could not read or process the uploaded capture.") from exc
 
 
 @app.post("/api/flowchart")
-async def flowchart(file: UploadFile = File(...)):
+async def flowchart(file: UploadFile = File(...), settings: str = Form("{}")):
     try:
-        return await run_in_threadpool(analyze_upload, file)
+        try:
+            thresholds = SecuritySettings.model_validate_json(settings)
+        except ValueError as exc:
+            raise HTTPException(422, "Invalid detection settings.") from exc
+        return await run_in_threadpool(analyze_upload, file, thresholds=thresholds)
     finally:
         await file.close()
 
@@ -85,6 +96,7 @@ class LiveCaptureRequest(BaseModel):
     interface: str = Field(min_length=1, max_length=512)
     seconds: int = Field(default=10, ge=5, le=60, strict=True)
     capture_filter: str = Field(default="", max_length=512, pattern=r"^[^\x00\r\n]*$")
+    settings: SecuritySettings = Field(default_factory=SecuritySettings)
 
 
 @app.get("/api/live/interfaces", dependencies=[Depends(require_local_capture)])
@@ -92,11 +104,17 @@ def live_interfaces():
     return {"interfaces": list_interfaces()}
 
 
+@app.get("/api/live/status", dependencies=[Depends(require_local_capture)])
+def live_status():
+    return capture_status()
+
+
 @app.post("/api/live/capture", dependencies=[Depends(require_local_capture)])
 def live_capture(options: LiveCaptureRequest):
     with capture_window(options.interface, options.seconds, options.capture_filter) as path:
         with path.open("rb") as source:
-            result = analyze_upload(UploadFile(filename="live.pcap", file=source), ignore_checksums=True)
+            result = analyze_upload(UploadFile(filename="live.pcap", file=source),
+                                    ignore_checksums=True, thresholds=options.settings)
         result["summary"]["capture_mode"] = "live_window"
         result["summary"]["interface"] = options.interface
         result["summary"]["warnings"].append(
