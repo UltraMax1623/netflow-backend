@@ -74,6 +74,9 @@ def main():
         page.wait_for_function("latestResult !== null && graph !== null")
         assert page.evaluate("graph.edges().length") == 80
         assert page.evaluate("chartInstances.protocolChart.data.datasets[0].data[0]") == 1200
+        assert page.evaluate("chartInstances.directionChart.config.type") == "doughnut"
+        assert page.evaluate("chartInstances.destinationChart.options.indexAxis") == "y"
+        assert page.locator('#dnsChart').locator('xpath=../..').get_attribute('class').find('is-empty') >= 0
         assert page.locator("#traffic-health").get_attribute("data-state") == "clear"
         assert page.evaluate("graph.nodes('[type=\"activity\"]').length") == 0
         page.evaluate("showWorkspace('analytics')")
@@ -110,6 +113,7 @@ def main():
             page.locator("#download-report").click()
         assert info.value.suggested_filename.endswith(".txt")
         page.evaluate("showWorkspace('analytics')")
+        page.locator('#connections-panel').scroll_into_view_if_needed()
         page.screenshot(path=str(ROOT / ".test-tmp" / "dashboard-graph.png"))
         page.locator("#graph-search").fill("site-100.example")
         page.wait_for_function("graph.edges().length === 1")

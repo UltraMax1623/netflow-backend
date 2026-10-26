@@ -23,28 +23,59 @@ function initCharts() {
         return;
     }
     Chart.defaults.font.family = "'Inter', sans-serif";
+    const palette = ['#2563eb', '#0d9488', '#e69a22', '#8b5cf6', '#e11d48', '#64748b'];
     const definitions = [
-        ['trafficChart', 'line', 'Throughput (Mbps)'], ['protocolChart', 'bar', 'Packets'],
-        ['usageChart', 'doughnut', 'Packets'], ['packetSizeChart', 'bar', 'Packets'],
-        ['rateChart', 'line', 'Packets/s'], ['destinationChart', 'bar', 'Packets to destination'],
-        ['handshakeChart', 'bar', 'Count'], ['sourceChart', 'bar', 'Packets from source'],
-        ['conversationChart', 'bar', 'Captured frame bytes'], ['portChart', 'bar', 'Packets'],
-        ['directionChart', 'bar', 'Captured frame bytes'], ['dnsChart', 'bar', 'Count']
+        ['trafficChart', 'line', 'Throughput (Mbps)', '#2563eb'],
+        ['rateChart', 'line', 'Packets/s', '#2563eb'],
+        ['usageChart', 'doughnut', 'Packets', palette],
+        ['directionChart', 'doughnut', 'Captured frame bytes', ['#0d9488','#e69a22','#94a3b8']],
+        ['protocolChart', 'bar', 'Packets', palette, true],
+        ['packetSizeChart', 'bar', 'Packets', '#64748b'],
+        ['destinationChart', 'bar', 'Packets to destination', '#0d9488', true],
+        ['sourceChart', 'bar', 'Packets from source', '#8b5cf6', true],
+        ['conversationChart', 'bar', 'Captured frame bytes', '#2563eb', true],
+        ['portChart', 'bar', 'Packets', '#e69a22', true],
+        ['handshakeChart', 'bar', 'Count', ['#2563eb','#0d9488','#8b5cf6','#16a34a','#e11d48'], true],
+        ['dnsChart', 'bar', 'Count', ['#2563eb','#0d9488','#e69a22'], true]
     ];
-    for (const [id, type, label] of definitions) {
+    for (const [id, type, label, color, horizontal] of definitions) {
+        const ring = type === 'doughnut';
+        const line = type === 'line';
         chartInstances[id] = new Chart(byId(id), {
-            type, data: {labels: [], datasets: [{label, data: [], borderColor: '#2563eb',
-                backgroundColor: type === 'doughnut' ? ['#2563eb','#0d9488','#f59e0b','#e11d48','#8b5cf6','#64748b'] : '#60a5fa',
-                borderWidth: 2, pointRadius: 0, tension: 0.15}]},
+            type, data: {labels: [], datasets: [{label, data: [], borderColor: line ? color : 'transparent',
+                backgroundColor: line ? '#2563eb21' : color,
+                borderWidth: line ? 2 : 0, pointRadius: 0, pointHoverRadius: 4,
+                tension: 0.24, fill: line && id === 'trafficChart', borderRadius: 5,
+                maxBarThickness: horizontal ? 20 : 30}]},
             options: {responsive: true, maintainAspectRatio: false, animation: false,
-                plugins: {legend: {display: type === 'doughnut', position: 'right'}},
-                ...(type === 'doughnut' ? {} : {scales: {y: {beginAtZero: true}, x: {ticks: {maxTicksLimit: 6}}}})}
+                indexAxis: horizontal ? 'y' : 'x',
+                plugins: {legend: {display: ring, position: 'right'},
+                    tooltip: {callbacks: {label: context => `${context.dataset.label}: ${numberText(context.parsed[horizontal ? 'x' : ring ? undefined : 'y'] ?? context.raw)}`}}},
+                ...(ring ? {cutout: '66%'} : {scales: horizontal ? {
+                    x: {beginAtZero: true, grid: {color:'#e8eef5'}, ticks: {precision:0, maxTicksLimit:5}},
+                    y: {grid: {display:false}, ticks: {autoSkip:false, callback(value) { const name = this.getLabelForValue(value); return name.length > 24 ? name.slice(0, 23) + '…' : name; }}}
+                } : {y: {beginAtZero:true, grid:{color:'#e8eef5'}, ticks:{precision: id === 'packetSizeChart' ? 0 : undefined}},
+                    x: {grid:{display:false}, ticks:{maxTicksLimit:6}}}})}
         });
+        const card = byId(id).closest('.chart-card, .chart-rows > div');
+        const empty = textElement('p', 'Upload or capture traffic to see this chart.', 'chart-empty');
+        empty.hidden = true;
+        card.append(empty);
     }
 }
 function setChart(id, labels, values) {
     const chart = chartInstances[id];
     if (!chart) return;
+    const empty = byId(id).closest('.chart-card, .chart-rows > div').querySelector('.chart-empty');
+    const hasData = values.some(value => Number(value) > 0);
+    const card = empty.parentElement;
+    card.classList.toggle('is-empty', !hasData);
+    if (['destinationChart','sourceChart','conversationChart','portChart'].includes(id)) {
+        byId(id).parentElement.style.height = `${Math.max(240, Math.min(720, labels.length * 30 + 60))}px`;
+    }
+    empty.hidden = hasData;
+    empty.textContent = latestResult ? 'No matching packets in this capture.' : 'Upload or capture traffic to see this chart.';
+    byId(id).style.visibility = hasData ? 'visible' : 'hidden';
     chart.data.labels = labels;
     chart.data.datasets[0].data = values;
     chart.update();
@@ -365,6 +396,13 @@ function showWorkspace(name) {
 }
 function setupWorkspace() {
     for (const id of ['trafficChart','usageChart']) byId('overview-chart-row').append(byId(id).parentElement.parentElement);
+    const detailed = byId('protocolChart').closest('.chart-rows');
+    for (const id of ['rateChart','protocolChart','packetSizeChart','destinationChart','sourceChart','handshakeChart']) {
+        const card = byId(id).parentElement.parentElement;
+        detailed.append(card);
+        if (id === 'rateChart') card.classList.add('chart-wide');
+    }
+    for (const id of ['conversationChart','portChart','directionChart','dnsChart']) detailed.append(byId(id).closest('.chart-card'));
     document.querySelectorAll('nav a').forEach(link => {
         link.setAttribute('aria-label', link.textContent.trim());
         link.title = link.textContent.trim();
