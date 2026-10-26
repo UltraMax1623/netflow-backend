@@ -20,12 +20,14 @@ app = FastAPI(title="NetFlow Analyzer API")
 
 @app.get("/", include_in_schema=False)
 def dashboard():
-    return FileResponse(Path(__file__).with_name("dashboard.html"))
+    return FileResponse(Path(__file__).with_name("dashboard.html"),
+                        headers={"Cache-Control": "no-store, max-age=0"})
 
 
 @app.get("/dashboard-ui.js", include_in_schema=False)
 def dashboard_script():
-    return FileResponse(Path(__file__).with_name("dashboard-ui.js"), media_type="text/javascript")
+    return FileResponse(Path(__file__).with_name("dashboard-ui.js"), media_type="text/javascript",
+                        headers={"Cache-Control": "no-store, max-age=0"})
 
 
 def analyze_upload(file, ignore_checksums=False, thresholds=None):

@@ -21,7 +21,10 @@ class FlowchartApiTests(unittest.TestCase):
         response = self.client.get('/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('flow-graph', response.text)
-        self.assertEqual(self.client.get('/dashboard-ui.js').status_code, 200)
+        self.assertEqual(response.headers['cache-control'], 'no-store, max-age=0')
+        script = self.client.get('/dashboard-ui.js')
+        self.assertEqual(script.status_code, 200)
+        self.assertEqual(script.headers['cache-control'], 'no-store, max-age=0')
 
     def test_capture_analytics_and_settings(self):
         from io import BytesIO
