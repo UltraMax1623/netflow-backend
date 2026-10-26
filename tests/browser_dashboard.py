@@ -76,6 +76,7 @@ def main():
         assert page.evaluate("chartInstances.protocolChart.data.datasets[0].data[0]") == 1200
         assert page.locator("#traffic-health").get_attribute("data-state") == "clear"
         assert page.evaluate("graph.nodes('[type=\"activity\"]').length") == 0
+        page.evaluate("showWorkspace('analytics')")
         page.evaluate("graph.edges()[0].emit('tap')")
         assert "Connections" in page.locator("#graph-details").inner_text()
         assert not page.locator("#graph-details pre").inner_text()
@@ -87,14 +88,18 @@ def main():
         assert "2 connections" in page.evaluate("graph.edges()[0].data('label')")
         page.locator("#graph-search").fill("")
         page.wait_for_function("graph.edges().length === 80")
+        page.locator('#graph-fullscreen').click()
+        page.wait_for_function("document.fullscreenElement !== null")
+        page.locator('#graph-fullscreen').click()
+        page.wait_for_function("document.fullscreenElement === null")
         page.locator("#graph-limit").select_option("150")
         page.wait_for_function("graph.edges().length === 150")
         for width in (390, 1440, 1920):
             page.set_viewport_size({"width": width, "height": 1000})
             page.wait_for_timeout(300)
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-            assert page.locator("#flow-graph").bounding_box()["height"] <= 541
-            assert page.locator("#trafficChart").bounding_box()["height"] < 200
+            assert 420 <= page.locator("#flow-graph").bounding_box()["height"] <= 901
+            assert page.locator("#protocolChart").bounding_box()["height"] <= 260
         page.set_viewport_size({"width": 1440, "height": 1000})
         page.locator('nav a[href="#settings"]').click()
         page.locator('input[name="pps_threshold"]').fill("5000")
@@ -104,13 +109,14 @@ def main():
         with page.expect_download() as info:
             page.locator("#download-report").click()
         assert info.value.suggested_filename.endswith(".txt")
-        page.evaluate("document.querySelector('#flow-section').scrollIntoView()")
+        page.evaluate("showWorkspace('analytics')")
         page.screenshot(path=str(ROOT / ".test-tmp" / "dashboard-graph.png"))
         page.locator("#graph-search").fill("site-100.example")
         page.wait_for_function("graph.edges().length === 1")
         page.evaluate("graph.edges()[0].emit('tap')")
         page.screenshot(path=str(ROOT / ".test-tmp" / "dashboard-details.png"))
         page.locator("#graph-search").fill("")
+        page.evaluate("showWorkspace('dashboard')")
         page.locator("#load-adapters").click()
         page.wait_for_function("document.querySelector('#live-interface').value === 'eth0'")
         page.locator("#start-live").click()
@@ -121,6 +127,35 @@ def main():
         page.route("**/api/flowchart", lambda route: route.fulfill(status=503, json={"detail": "Zeek unavailable"}))
         page.locator("#file-input").set_input_files({"name": "failure.pcap", "mimeType": "application/octet-stream", "buffer": b"test"})
         page.wait_for_function("document.querySelector('#traffic-health').dataset.state === 'error'")
+        page.evaluate("showWorkspace('dashboard')")
+        assert page.locator('#view-analytics').is_hidden()
+        page.set_viewport_size({'width':1440,'height':1000})
+        a, b = page.locator('#upload-panel').bounding_box(), page.locator('#live-panel').bounding_box()
+        assert abs(a['y']-b['y']) < 2
+        assert page.locator('#traffic-health').bounding_box()['y'] > a['y']+a['height']
+        page.locator('[role="button"][aria-label="Analyze TCP traffic"]').click()
+        assert page.locator('#view-dashboard').is_hidden()
+        assert page.locator('#graph-protocol').input_value() == 'TCP'
+        page.locator('#toggle-details').click()
+        assert page.locator('#graph-details').is_hidden()
+        page.evaluate("showWorkspace('settings')")
+        page.locator('#chart-bin').select_option('5')
+        page.locator('#layout-choice').select_option('circle')
+        page.locator('#edge-labels').select_option('hide')
+        page.evaluate("showWorkspace('help')")
+        assert 'loaded' in page.locator('#integration-status').inner_text()
+        page.set_viewport_size({'width':390,'height':1000})
+        page.locator('#nav-toggle').click()
+        page.locator('nav a[href="#dashboard"]').click()
+        assert page.locator('#view-dashboard').is_visible()
+        assert page.locator('#nav-toggle').get_attribute('aria-expanded') == 'false'
+        page.set_viewport_size({'width':1440,'height':1000})
+        page.unroute('**/api/flowchart')
+        page.route('**/api/flowchart', lambda route: route.fulfill(json=fixture()))
+        page.locator('#file-input').set_input_files({'name':'fixture.pcap','mimeType':'application/octet-stream','buffer':b'test'})
+        page.wait_for_function("latestResult !== null && !processing")
+        page.evaluate("showWorkspace('dashboard')")
+        page.screenshot(path=str(ROOT / '.test-tmp' / 'dashboard-overview.png'))
         assert not errors, errors
         browser.close()
     server.shutdown()

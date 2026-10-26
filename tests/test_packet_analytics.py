@@ -119,3 +119,51 @@ class PacketAnalyticsTests(unittest.TestCase):
         for settings in [{"gateway_ip": "bad"}, {"gateway_mac": "bad"}, {"pps_threshold": float("nan")}]:
             with self.assertRaises(ValueError):
                 SecuritySettings(**settings)
+
+    def test_scan_sweep_and_retransmission_exclusion(self):
+        scan = [(i, frame(tcp(dport=100+i))) for i in range(20)]
+        result = self.analyze(scan)
+        self.assertTrue(any('port scan' in f['title'] for f in result['security']['findings']))
+        repeat = self.analyze([(i, frame(tcp())) for i in range(25)])
+        self.assertFalse(repeat['security']['findings'])
+        sweep = self.analyze([(i, frame(tcp(), dst=f'10.1.0.{i+1}')) for i in range(20)])
+        self.assertTrue(any('host sweep' in f['title'] for f in sweep['security']['findings']))
+        spaced = self.analyze([(i*61, frame(tcp(dport=100+i))) for i in range(20)])
+        self.assertFalse(any('scan' in f['title'] for f in spaced['security']['findings']))
+
+    def test_periodic_connections_and_irregular_negative(self):
+        regular = self.analyze([(i*10, frame(tcp(sport=1000+i))) for i in range(10)])
+        self.assertTrue(any('Regularly' in f['title'] for f in regular['security']['findings']))
+        irregular = self.analyze([(i*i*10, frame(tcp(sport=1000+i))) for i in range(10)])
+        self.assertFalse(any('Regularly' in f['title'] for f in irregular['security']['findings']))
+
+    def test_dns_extended_indicators(self):
+        frames = []
+        for i in range(30):
+            query = dpkt.dns.DNS(id=i, qd=[dpkt.dns.DNS.Q(name=str(i)+'a'*50+'.example')])
+            response = dpkt.dns.DNS(id=i, qr=1, rcode=3, qd=query.qd)
+            frames.extend([(i, frame(dpkt.udp.UDP(sport=1000+i,dport=53,data=bytes(query)))),
+                           (i+.1, frame(dpkt.udp.UDP(sport=53,dport=1000+i,data=bytes(response)), '10.0.0.2','10.0.0.1'))])
+        result = self.analyze(frames, SecuritySettings(dns_queries_minute=20))
+        titles = [f['title'] for f in result['security']['findings']]
+        self.assertIn('DNS query burst', titles)
+        self.assertIn('Many unusually long DNS names', titles)
+        self.assertIn('High DNS name-error share', titles)
+        self.assertEqual(result['dns_counts'], {'Queries':30,'Replies':30,'NXDOMAIN':30})
+
+    def test_plaintext_auth_redacts_secret_and_reset_indicator(self):
+        result = self.analyze([(1, frame(tcp(dport=80, flags=16, data=b'GET / HTTP/1.1\r\nHost: example.com\r\nAuthorization: Basic SECRET\r\n\r\n')))])
+        self.assertEqual(result['security']['status'], 'high')
+        self.assertNotIn('SECRET', str(result))
+        reset = self.analyze([(i, frame(tcp(flags=4))) for i in range(50)])
+        self.assertTrue(any('reset' in f['title'] for f in reset['security']['findings']))
+
+    def test_transfer_direction_and_chart_totals(self):
+        frames = [(i/100, frame(tcp(flags=16, data=b'x'*2000), dst='8.8.8.8')) for i in range(500)]
+        result = self.analyze(frames, SecuritySettings(outbound_mb=1))
+        self.assertTrue(any('transfer' in f['title'] for f in result['security']['findings']))
+        self.assertEqual(result['direction_bytes']['Private → public'], sum(len(p) for _,p in frames))
+        self.assertEqual(sum(result['destination_ports'].values()),500)
+        self.assertEqual(sum(result['top_conversations'].values()), result['summary']['total_bytes'])
+        local = self.analyze([(1, frame(tcp()))])
+        self.assertEqual(list(local['direction_bytes']), ['Other / local'])

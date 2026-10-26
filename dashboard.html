@@ -97,33 +97,82 @@
         nav a[aria-current=page] { background: #eff6ff; color: #1d4ed8; }
         @media (max-width: 640px) { .metrics-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .settings-grid { grid-template-columns: 1fr; } }
         @media (min-width: 1800px) { .graph-inspector { display: grid; grid-template-columns: minmax(0,1fr) 270px; gap: 12px; } #graph-details { max-height: 540px; margin-top: 0; } }
+        :root { --ink:#172b47; --muted:#61738b; --line:#dce5ef; }
+        body { color:var(--ink); background:#f3f6fb; }
+        [hidden] { display:none !important; }
+        #sidebar { display:flex; width:72px; flex-shrink:0; transition:width .2s; overflow:hidden; }
+        #sidebar:hover, #sidebar:focus-within, #sidebar.pinned { width:220px; }
+        #sidebar .nav-label { opacity:0; white-space:nowrap; transition:opacity .15s; }
+        #sidebar:hover .nav-label, #sidebar:focus-within .nav-label, #sidebar.pinned .nav-label { opacity:1; }
+        #sidebar nav a { min-height:46px; white-space:nowrap; }
+        #sidebar i { flex-shrink:0; min-width:20px; }
+        #sidebar > div { padding:0 24px; }
+        header { flex-shrink:0; }
+        main { padding:28px !important; }
+        .page-heading { display:flex; justify-content:space-between; gap:20px; align-items:center; margin-bottom:28px; }
+        .page-heading h1 { font-size:30px; font-weight:700; letter-spacing:-1px; }
+        .page-heading p, .section-description { color:var(--muted); font-size:13px; margin:8px 0 16px; }
+        .page-heading .eyebrow { color:#2563eb; font-size:10px; letter-spacing:2px; font-weight:700; margin:0 0 5px; }
+        .primary-link { background:#1d4ed8; color:white; border-radius:9px; padding:11px 16px; font-size:13px; white-space:nowrap; }
+        .workspace-view { display:flex; flex-direction:column; gap:24px; }
+        .workspace-view section { border:1px solid var(--line); border-radius:16px; padding:24px; background:white; min-width:0; box-shadow:0 3px 16px #243f6105; margin:0; }
+        .workspace-view h2 { font-size:18px; font-weight:650; }
+        .input-row { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:stretch; }
+        #drop-zone { min-height:285px; padding:24px; background:#f8fbff; border-color:#c6d7ee; }
+        .protocol-cards { display:flex; gap:12px; overflow-x:auto; padding-bottom:10px; }
+        .protocol-cards > div { min-width:210px; flex:1; cursor:pointer; }
+        .protocol-cards > div:focus-visible { outline:3px solid #172b47; outline-offset:2px; }
+        .protocol-cards [data-protocol-count] { display:block; margin-left:0; }
+        .protocol-cards h3 { font-size:16px; }
+        .protocol-cards > div > div > div { flex-wrap:wrap; }
+        .chart-rows { display:flex; flex-direction:column; gap:20px; }
+        .chart-rows > div, .chart-card { border:1px solid var(--line); padding:20px; border-radius:12px; margin-top:16px; background:#fbfdff; min-width:0; }
+        .chart-rows .h-40, .chart-frame { height:250px; position:relative; flex:none; }
+        .chart-card h3 { font-size:12px; font-weight:600; color:#52677f; margin-bottom:12px; }
+        #overview-chart-row { display:grid; grid-template-columns:1fr 1fr; }
+        .graph-filters { grid-template-columns:repeat(5,minmax(0,1fr)); }
+        .graph-inspector { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; }
+        .graph-inspector.details-hidden { grid-template-columns:1fr; }
+        #graph-details { margin:0; max-height:70vh; background:#f8fafd; }
+        #flow-graph { background:radial-gradient(#cbd8e8 .8px,transparent .8px) !important; background-size:20px 20px !important; }
+        #connections-panel:fullscreen { overflow:auto; background:white; padding:24px; }
+        #connections-panel:fullscreen #flow-graph { height:72vh !important; }
+        .settings-grid select { width:100%; padding:9px; border:1px solid var(--line); border-radius:7px; background:white; }
+        #chart-visibility { display:flex; flex-wrap:wrap; gap:14px; margin:20px 0; font-size:13px; }
+        #chart-visibility legend { margin-bottom:10px; font-weight:600; }
+        button, a, input, select { touch-action:manipulation; }
+        :focus-visible { outline:2px solid #2563eb; outline-offset:3px; }
+        #loading-overlay { position:fixed; }
+        @media (max-width:1100px) { .graph-inspector { grid-template-columns:1fr; } #graph-details { max-height:260px; } .graph-filters { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+        @media (max-width:760px) { main { padding:16px !important; } .input-row, #overview-chart-row { grid-template-columns:1fr; } .page-heading { align-items:flex-start; flex-direction:column; } .page-heading h1 { font-size:25px; } .workspace-view section { padding:16px; } #sidebar { position:fixed; top:64px; bottom:0; left:0; width:0; z-index:40; } #sidebar:hover, #sidebar:focus-within, #sidebar.pinned { width:220px; } header { padding:0 16px !important; } header .text-slate-500 { display:none; } #flow-graph { min-height:420px !important; } }
+        @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; transition:none !important; } }
     </style>
 </head>
 <body class="bg-[#f8fafc] text-gray-800 font-sans h-screen flex overflow-hidden">
 
     <!-- Sidebar -->
-    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col hidden md:flex z-10 shadow-sm">
+    <aside id="sidebar" aria-label="Main navigation" class="w-64 bg-white border-r border-gray-200 flex flex-col hidden md:flex z-10 shadow-sm">
         <div class="h-16 flex items-center px-6 border-b border-gray-100">
             <div class="text-blue-600 text-2xl font-bold flex items-center gap-2">
                 <i class="fa-solid fa-network-wired"></i>
-                NetFlow
+                <span class="nav-label">NetFlow</span>
             </div>
         </div>
         <nav class="flex-1 py-4 px-3 space-y-1">
             <a href="#dashboard" class="flex items-center gap-3 px-3 py-2.5 bg-blue-50 text-blue-700 rounded-lg font-medium transition-colors">
-                <i class="fa-solid fa-border-all w-5 text-center"></i> Dashboard
+                <i class="fa-solid fa-border-all w-5 text-center"></i> <span class="nav-label">Dashboard</span>
             </a>
             <a href="#analytics" class="flex items-center gap-3 px-3 py-2.5 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
-                <i class="fa-solid fa-chart-line w-5 text-center"></i> Analysis
+                <i class="fa-solid fa-chart-line w-5 text-center"></i> <span class="nav-label">Analysis</span>
             </a>
             <a href="#reports" class="flex items-center gap-3 px-3 py-2.5 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
-                <i class="fa-solid fa-file-invoice w-5 text-center"></i> Reports
+                <i class="fa-solid fa-file-invoice w-5 text-center"></i> <span class="nav-label">Reports</span>
             </a>
             <a href="#settings" class="flex items-center gap-3 px-3 py-2.5 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
-                <i class="fa-solid fa-gear w-5 text-center"></i> Settings
+                <i class="fa-solid fa-gear w-5 text-center"></i> <span class="nav-label">Settings</span>
             </a>
             <a href="#help" class="flex items-center gap-3 px-3 py-2.5 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors mt-auto">
-                <i class="fa-regular fa-circle-question w-5 text-center"></i> Help
+                <i class="fa-regular fa-circle-question w-5 text-center"></i> <span class="nav-label">Help</span>
             </a>
         </nav>
     </aside>
@@ -134,7 +183,7 @@
         <!-- Header -->
         <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 z-10 shadow-sm">
             <div class="flex items-center gap-2 text-sm text-gray-500">
-                <a href="#dashboard">Home</a>
+                <button id="nav-toggle" aria-label="Toggle navigation" aria-expanded="false"><i class="fa-solid fa-bars"></i></button><a href="#dashboard">Home</a>
                 <i class="fa-solid fa-chevron-right text-xs"></i>
                 <span class="text-gray-900 font-medium">Analyzer</span>
             </div>
@@ -156,31 +205,15 @@
         <!-- Scrollable Dashboard Content -->
         <main id="dashboard" class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative">
             
-            <section id="traffic-health" data-state="unknown" class="health-panel mb-6" role="status" aria-live="polite">
-                <h2 id="health-title" class="text-lg font-semibold">Traffic summary — waiting for capture</h2>
-                <p id="health-description" class="text-sm mt-2"></p>
-                <div id="capture-metrics" class="metrics-grid"></div>
-                <div id="security-findings"></div>
-                <details class="mt-3 text-sm"><summary>Detection coverage and limitations</summary><ul id="security-coverage" class="list-disc pl-5 mt-2"></ul></details>
-            </section>
-            <!-- Global Loading Overlay -->
-            <div id="loading-overlay" class="absolute inset-0 bg-white/80 z-50 flex flex-col items-center justify-center rounded-lg">
+<div class="page-heading"><div><p class="eyebrow">NETWORK OBSERVABILITY</p><h1 id="page-title">Traffic dashboard</h1><p id="page-description">Capture traffic. Understand what matters. Investigate the evidence.</p></div><a class="primary-link" href="#analytics">Open analysis →</a></div><div id="loading-overlay" class="absolute inset-0 bg-white/80 z-50 flex flex-col items-center justify-center rounded-lg">
                 <div class="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
                 <h2 class="text-xl font-bold text-gray-800">Processing PCAP File...</h2>
                 <p class="text-gray-500 mt-2">Extracting packets, protocols, and analytics.</p>
                 <div class="w-64 bg-gray-200 rounded-full h-2 mt-6 overflow-hidden">
                     <div class="bg-blue-600 h-2 rounded-full w-full animate-[progress_2s_ease-in-out]"></div>
                 </div>
-            </div>
-
-            <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-                
-                <!-- Left Column (Data Input & Matrix) -->
-                <div class="xl:col-span-5 space-y-6 flex flex-col min-w-0">
-                    
-                    <!-- 1. Data Input -->
-                    <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                        <h2 class="text-lg font-semibold text-gray-800 mb-4">1. Data Input</h2>
+            </div><div id="view-dashboard" class="workspace-view"><div class="input-row"><section id="upload-panel" class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4">Upload a capture</h2>
                         
                         <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer group">
                             <input type="file" id="file-input" class="hidden" accept=".pcap,.pcapng,.cap">
@@ -205,11 +238,9 @@
                                 <button id="remove-upload" type="button" class="shrink-0 rounded p-1 text-xl leading-none text-slate-500 hover:text-red-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Remove uploaded file" title="Remove uploaded file">×</button>
                             </div>
                         </div>
-                    </section>
-
-                    <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                    </section><section id="live-panel" class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                         <h2 class="text-lg font-semibold text-gray-800 mb-3">Live network capture</h2>
-                        <p class="text-sm text-gray-500 mb-3">Capture from this server's Wi-Fi or Ethernet adapter. Section 4 updates after each window is analyzed; traffic during analysis is not captured.</p>
+                        <p class="text-sm text-gray-500 mb-3">Capture from this server's Wi-Fi or Ethernet adapter. Analysis updates after each window is analyzed; traffic during analysis is not captured.</p>
                         <button id="load-adapters" type="button" class="text-blue-700 text-sm mb-2">Refresh adapters</button>
                         <label for="live-interface" class="block text-sm">Network adapter</label>
                         <select id="live-interface" class="border rounded p-2 w-full mb-2"><option value="">Refresh adapters to select one</option></select>
@@ -222,13 +253,16 @@
                             <button id="stop-live" type="button" disabled class="border px-4 py-2 rounded disabled:opacity-40">Stop after this window</button>
                         </div>
                         <p id="live-status" role="status" aria-live="polite" class="text-sm mt-3 text-slate-600">Requires dumpcap/Npcap and Zeek. Open this dashboard on localhost.</p>
-                    </section>
-
-                    <!-- 2. Protocol Matrix -->
-                    <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                        <h2 class="text-lg font-semibold text-gray-800 mb-4">2. Protocol Matrix</h2>
+                    </section></div><section id="traffic-health" data-state="unknown" class="health-panel mb-6" role="status" aria-live="polite">
+                <h2 id="health-title" class="text-lg font-semibold">Traffic summary — waiting for capture</h2>
+                <p id="health-description" class="text-sm mt-2"></p>
+                <div id="capture-metrics" class="metrics-grid"></div>
+                <div id="security-findings"></div>
+                <details class="mt-3 text-sm"><summary>Detection coverage and limitations</summary><ul id="security-coverage" class="list-disc pl-5 mt-2"></ul></details>
+            </section><section id="protocol-panel" class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4">Protocol explorer</h2>
                         
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <p class="section-description">Select a protocol to inspect its traffic. Service counts overlap transport counts; percentages are of all captured frames.</p><div class="protocol-cards">
                             <!-- Card 1: TCP -->
                             <div class="bg-card-teal text-white p-4 rounded-xl shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden group">
                                 <div class="absolute -right-4 -top-4 opacity-10 group-hover:scale-110 transition-transform"><i class="fa-solid fa-right-left text-6xl"></i></div>
@@ -339,22 +373,43 @@
                                 </div>
                             </div>
                         </div>
-                    </section>
-                </div>
-
-                <!-- Right Column (Analytics & Flow) -->
-                <div class="xl:col-span-7 space-y-6 flex flex-col min-w-0">
-                    
-                    <!-- 3. Network Analytics Overview -->
-                    <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                    </section><section id="overview-charts"><h2>Traffic at a glance</h2><p class="section-description">Capture-wide trends. Open Analysis for detailed charts and connection evidence.</p><div id="overview-chart-row" class="chart-rows"></div></section></div><div id="view-analytics" class="workspace-view" hidden><section id="connections-panel" class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                        <h2 id="flow-section" class="text-lg font-semibold text-gray-800 mb-4">Traffic connections</h2>
+                        <div class="graph-filters"><label>Protocol<select id="graph-protocol"><option value="">All protocols</option><option>TCP</option><option>UDP</option><option>DNS</option><option>ICMP</option><option>ARP</option><option>DHCP</option><option>IPv6</option><option>Broadcast</option></select></label>
+                            <label>Device<select id="graph-device"><option value="">All devices</option></select></label>
+                            <label>Domain / IP / service<input id="graph-search" type="search" placeholder="Search connections"></label>
+                            <label>Max groups<select id="graph-limit"><option>40</option><option selected>80</option><option>150</option></select></label>
+                            <label class="flex items-center gap-2"><input id="hide-dns" type="checkbox"> Hide DNS-only traffic</label>
+                        </div>
+                        <button id="clear-graph-filters" class="text-sm text-blue-700 my-2">Clear all filters</button>
+                        <p id="protocol-context" class="section-description"></p><p id="graph-scope" class="text-xs text-slate-500 my-2"></p>
+                        <p class="text-xs text-gray-500 mb-2">Drag the background to pan, drag nodes to rearrange, or click for details. Mouse-wheel zoom is off by default; + / − always work.</p>
+                        <div class="flex flex-wrap gap-4 text-xs mb-3 text-slate-600" aria-label="Graph legend">
+                            <span><i class="fa-solid fa-laptop mr-1 text-blue-600" aria-hidden="true"></i> Host</span>
+                            <span><i class="fa-solid fa-globe mr-1 text-teal-700" aria-hidden="true"></i> Domain</span>
+                            <span><i class="fa-solid fa-server mr-1 text-teal-700" aria-hidden="true"></i> Server</span>
+                        </div>
+                        <p id="graph-status" role="status" aria-live="polite" class="text-sm mb-2">Upload a capture to generate its flowchart.</p>
+                        <ul id="graph-warnings" class="text-xs text-amber-700 list-disc pl-4 mb-2"></ul>
+                        <div class="flex flex-wrap gap-2 mb-0 text-sm border border-b-0 rounded-t-xl bg-white p-2 items-center">
+                            <button id="graph-fullscreen" class="border rounded px-3 py-1">Fullscreen</button><button id="toggle-details" class="border rounded px-3 py-1" aria-expanded="true">Hide details</button><button id="zoom-in" class="border rounded px-3 py-1 font-semibold" aria-label="Zoom in" title="Zoom in" disabled>+</button>
+                            <button id="zoom-out" class="border rounded px-3 py-1 font-semibold" aria-label="Zoom out" title="Zoom out" disabled>−</button>
+                            <button id="fit-graph" class="border rounded px-3 py-1" disabled>Fit to view</button>
+                            <button id="reset-graph" class="border rounded px-3 py-1" disabled>Reset layout</button>
+                            <label class="ml-auto flex items-center gap-2 text-xs cursor-pointer"><input id="wheel-zoom" type="checkbox"> Mouse-wheel zoom</label>
+                        </div>
+                        <div class="graph-inspector"><div><div id="flow-graph" style="height:70vh; min-height:480px; max-height:900px" class="border rounded-b-xl bg-gray-50" aria-label="Interactive capture flowchart"></div>
+                        <p class="text-xs text-slate-500 mt-2">Arrows show observed initiator → destination relationships. Connection bytes are Zeek payload metrics; charts count captured frames.</p>
+                        </div><div id="graph-details" class="mt-3 border rounded-lg p-3 text-sm break-words" aria-live="polite">Select a node or connection to inspect its evidence.</div></div>
+                    </section><section id="charts-panel" class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                         <div class="flex justify-between items-center mb-4">
-                            <h2 id="analytics" class="text-lg font-semibold text-gray-800">3. Network Analytics Overview</h2>
+                            <h2 id="analytics" class="text-lg font-semibold text-gray-800">Detailed traffic charts</h2>
                             <button id="refresh-charts-btn" class="text-gray-400 hover:text-blue-600 transition-colors" title="Reload Data">
                                 <i class="fa-solid fa-rotate-right"></i>
                             </button>
                         </div>
                         
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="chart-rows">
                             <p id="chart-note" class="text-xs text-slate-500 col-span-full"></p>
                             <!-- Traffic Distribution Chart -->
                             <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
@@ -392,49 +447,19 @@
 <div class="border border-gray-100 rounded-lg p-3"><h3 class="text-xs font-semibold text-gray-600 mb-2">TCP handshake evidence</h3><div class="h-40 relative"><canvas id="handshakeChart"></canvas></div></div>
 <div class="border border-gray-100 rounded-lg p-3"><h3 class="text-xs font-semibold text-gray-600 mb-2">Top sources · packets</h3><div class="h-40 relative"><canvas id="sourceChart"></canvas></div></div>
                         </div>
-                    </section>
-
-                    <!-- 4. Data Processing Flow -->
-                    <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                        <h2 id="flow-section" class="text-lg font-semibold text-gray-800 mb-4">4. Traffic connections</h2>
-                        <div class="graph-filters">
-                            <label>Device<select id="graph-device"><option value="">All devices</option></select></label>
-                            <label>Domain / IP / service<input id="graph-search" type="search" placeholder="Search connections"></label>
-                            <label>Max groups<select id="graph-limit"><option>40</option><option selected>80</option><option>150</option></select></label>
-                            <label class="flex items-center gap-2"><input id="hide-dns" type="checkbox"> Hide DNS-only traffic</label>
-                        </div>
-                        <p id="graph-scope" class="text-xs text-slate-500 my-2"></p>
-                        <p class="text-xs text-gray-500 mb-2">Drag the background to pan, drag nodes to rearrange, or click for details. Mouse-wheel zoom is off by default; + / − always work.</p>
-                        <div class="flex flex-wrap gap-4 text-xs mb-3 text-slate-600" aria-label="Graph legend">
-                            <span><i class="fa-solid fa-laptop mr-1 text-blue-600" aria-hidden="true"></i> Host</span>
-                            <span><i class="fa-solid fa-globe mr-1 text-teal-700" aria-hidden="true"></i> Domain</span>
-                            <span><i class="fa-solid fa-server mr-1 text-teal-700" aria-hidden="true"></i> Server</span>
-                        </div>
-                        <p id="graph-status" role="status" aria-live="polite" class="text-sm mb-2">Upload a capture to generate its flowchart.</p>
-                        <ul id="graph-warnings" class="text-xs text-amber-700 list-disc pl-4 mb-2"></ul>
-                        <div class="flex flex-wrap gap-2 mb-0 text-sm border border-b-0 rounded-t-xl bg-white p-2 items-center">
-                            <button id="zoom-in" class="border rounded px-3 py-1 font-semibold" aria-label="Zoom in" title="Zoom in" disabled>+</button>
-                            <button id="zoom-out" class="border rounded px-3 py-1 font-semibold" aria-label="Zoom out" title="Zoom out" disabled>−</button>
-                            <button id="fit-graph" class="border rounded px-3 py-1" disabled>Fit to view</button>
-                            <button id="reset-graph" class="border rounded px-3 py-1" disabled>Reset layout</button>
-                            <label class="ml-auto flex items-center gap-2 text-xs cursor-pointer"><input id="wheel-zoom" type="checkbox"> Mouse-wheel zoom</label>
-                        </div>
-                        <div class="graph-inspector"><div><div id="flow-graph" style="height:540px; min-height:360px; max-height:65vh" class="border rounded-b-xl bg-gray-50" aria-label="Interactive capture flowchart"></div>
-                        <p class="text-xs text-slate-500 mt-2">Arrows show observed initiator → destination relationships. Connection bytes are Zeek payload metrics; charts count captured frames.</p>
-                        </div><div id="graph-details" class="mt-3 border rounded-lg p-3 text-sm break-words" aria-live="polite">Select a node or connection to inspect its evidence.</div></div>
-                    </section>
-
-                </div>
-            </div>
-
-            <section id="reports" class="utility-panel">
+                    <div class="chart-card"><h3>Busiest directional conversations · frame bytes</h3><div class="chart-frame"><canvas id="conversationChart"></canvas></div></div><div class="chart-card"><h3>Destination ports · packets</h3><div class="chart-frame"><canvas id="portChart"></canvas></div></div><div class="chart-card"><h3>Private / public direction · frame bytes</h3><div class="chart-frame"><canvas id="directionChart"></canvas></div></div><div class="chart-card"><h3>DNS queries, replies and name errors</h3><div class="chart-frame"><canvas id="dnsChart"></canvas></div></div></section></div><div id="view-reports" class="workspace-view" hidden><section id="reports" class="utility-panel">
                 <h2>Reports</h2><p id="report-summary">Analyze a capture to export its report.</p>
                 <div class="flex gap-3 mt-3"><button id="download-report" disabled>Download readable report</button><button id="download-json" disabled>Export full JSON</button></div>
-            </section>
-            <section id="settings" class="utility-panel">
-                <h2>Detection settings</h2><p>Apply to the next upload or live session. Defaults are investigation thresholds, not a learned baseline.</p>
+            </section></div><div id="view-settings" class="workspace-view" hidden><section id="settings" class="utility-panel">
+                <h2>Display preferences</h2><p>Changes apply immediately. Detection thresholds below apply to the next capture.</p>
+<div class="settings-grid display-settings">
+<label>Graph layout<select id="layout-choice"><option value="auto">Automatic</option><option value="breadthfirst">Hierarchy</option><option value="circle">Circle</option><option value="grid">Grid</option><option value="cose">Force directed</option></select></label>
+<label>Connection labels<select id="edge-labels"><option value="auto">Automatic</option><option value="show">Always show</option><option value="hide">Hide</option></select></label>
+<label>Chart top results<select id="chart-top"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></label>
+<label>Timeline grouping<select id="chart-bin"><option value="1">Original bins</option><option value="5">Combine 5 bins</option><option value="10">Combine 10 bins</option></select></label>
+</div><fieldset id="chart-visibility"><legend>Visible charts</legend></fieldset><h2 class="mt-6">Detection thresholds</h2><p>Apply to the next upload or live session. Defaults are investigation thresholds, not a learned baseline.</p>
                 <form id="detection-settings">
-                    <div class="settings-grid">
+                    <div class="settings-grid"><label>Distinct ports / source-target / minute<input name="scan_ports" type="number" value="20" min="5" max="1000" required></label><label>Distinct hosts / source-port / minute<input name="sweep_hosts" type="number" value="20" min="5" max="1000" required></label><label>Minimum RST packets (also requires 20% share)<input name="reset_min" type="number" value="50" min="5" max="1000000" required></label><label>Minimum DNS replies (50% NXDOMAIN)<input name="dns_min_replies" type="number" value="30" min="10" max="1000000" required></label><label>DNS queries / client / minute<input name="dns_queries_minute" type="number" value="300" min="10" max="1000000" required></label><label>Distinct unusually long DNS names<input name="dns_long_names" type="number" value="20" min="5" max="1000" required></label><label>Private-to-public transfer threshold (MB)<input name="outbound_mb" type="number" value="100" min="1" max="1000000" required></label><label>Minimum periodic TCP attempts<input name="periodic_min" type="number" value="10" min="8" max="64" required></label>
                         <label>Packet rate threshold (packets/s)<input name="pps_threshold" type="number" value="10000" min="1" max="1000000000" required></label>
                         <label>ICMP rate threshold (packets/s)<input name="icmp_pps_threshold" type="number" value="1000" min="1" max="1000000000" required></label>
                         <label>Minimum unique SYN attempts<input name="syn_min" type="number" value="100" min="10" max="1000000" required></label>
@@ -448,9 +473,8 @@
                     <button id="use-baseline" type="button" disabled>Use this capture as normal-rate baseline</button>
                     <span id="settings-status" role="status" class="ml-3 text-sm"></span>
                 </form>
-            </section>
-            <section id="help" class="utility-panel">
-                <h2>Help</h2>
+            </section></div><div id="view-help" class="workspace-view" hidden><section id="help" class="utility-panel">
+                <h2>Help & integrations</h2><p id="integration-status"></p><p>Analysis runs locally with Zeek and packet decoding. No external threat-intelligence service is configured and captures are not sent to one. Chart.js, Cytoscape, fonts and styling load from public CDNs.</p>
                 <p>Upload PCAP/PCAPNG or select a live adapter. Live capture uses short windows and pauses during analysis. All charts and the assessment cover the latest capture only. Graph filters affect only the graph.</p>
                 <p>Click a graph card or connection for readable evidence. Raw JSON is optional. Red indicates a high-priority heuristic or a processing error; amber indicates a review item or incomplete coverage; green means no configured indicators were found.</p>
                 <p>Use a known normal capture to choose a baseline in Settings. Low TCP completion, conflicting ARP/DNS, and repeated SSH connections need investigation; they do not prove an attack. TTL changes and HTTP volume alone are not sufficient evidence.</p>
@@ -460,8 +484,7 @@
                     <li>SSH: <code>ssh or tcp.port == 22</code></li><li>Initial SYN: <code>tcp.flags.syn == 1 and tcp.flags.ack == 0</code></li></ul>
                     <p>The live filter field uses capture-filter syntax instead, for example <code>port 53</code> or <code>tcp port 22</code>.</p>
                 </details>
-            </section>
-        </main>
+            </section></div>        </main>
     </div>
 
     <!-- Scripts for Interactivity and Charts -->
@@ -470,7 +493,7 @@
         let graphResult = null;
         let processing = false;
         const graphLayout = () => ({
-            name: graph && graph.nodes().length > 60 ? 'grid' : 'breadthfirst',
+            name: document.getElementById('layout-choice').value !== 'auto' ? document.getElementById('layout-choice').value : graph && graph.nodes().length > 60 ? 'grid' : 'breadthfirst',
             directed: true, padding: 35, spacingFactor: 1.25, avoidOverlap: true,
             animate: false, fit: true,
             stop: () => {
@@ -513,7 +536,8 @@
             if (graph) graph.destroy();
             document.getElementById('graph-details').textContent = 'Select a device or connection for readable details.';
             document.getElementById('graph-scope').textContent =
-                `Showing ${display.edges.length} of ${display.total} matching connection groups. Repeated connections are combined; generic activity boxes are hidden.`;
+                display.edges.length ? `Showing ${display.edges.length} of ${display.total} matching connection groups. Repeated connections are combined.` :
+                'No connections match this selection. Clear all filters to see available connections. Some packets (such as ARP) do not generate connection nodes.';
 
             const activityIds = new Set(display.nodes.filter(node => node.type === 'activity').map(node => node.id));
             graph = cytoscape({
@@ -538,9 +562,9 @@
                     { selector: 'node[type="server"], node[type="domain"]', style: { 'background-color': '#eaf7f6', 'border-color': '#147d89' } },
                     { selector: 'node[type="activity"]', style: { 'background-color': '#fff7e5', 'border-color': '#dfa43b' } },
                     { selector: 'edge', style: {
-                        'width': 2.5, 'line-color': '#2385c7', 'target-arrow-color': '#2385c7',
+                        'width': 1.5, 'opacity': 0.55, 'line-color': '#2385c7', 'target-arrow-color': '#2385c7',
                         'target-arrow-shape': 'triangle', 'curve-style': 'bezier',
-                        'label': display.edges.length > 40 ? '' : 'data(label)', 'arrow-scale': 0.9,
+                        'label': document.getElementById('edge-labels').value === 'hide' || (document.getElementById('edge-labels').value === 'auto' && display.edges.length > 40) ? '' : 'data(label)', 'arrow-scale': 0.9,
                         'font-size': 11, 'color': '#475569', 'text-rotation': 'autorotate',
                         'text-wrap': 'wrap', 'text-max-width': 110,
                         'text-background-color': '#f8fafc', 'text-background-opacity': 0.95,
@@ -550,7 +574,7 @@
                     { selector: '.dimmed', style: { 'opacity': 0.15 } },
                     { selector: 'node:selected', style: { 'border-width': 4, 'border-color': '#f59e0b' } },
                     { selector: 'edge:selected', style: {
-                        'width': 3, 'line-color': '#d97706', 'target-arrow-color': '#d97706',
+                        'width': 3, 'opacity': 1, 'line-color': '#d97706', 'target-arrow-color': '#d97706',
                         'label': 'data(label)', 'font-size': 12, 'color': '#92400e',
                         'text-rotation': 'autorotate', 'text-background-color': '#fffbeb',
                         'text-background-opacity': 1, 'text-background-padding': 4,
@@ -779,6 +803,7 @@
 
         // Setup Event Listeners on load
         window.onload = () => {
+            setupWorkspace();
             initCharts();
             document.getElementById('load-adapters').addEventListener('click', loadAdapters);
             document.getElementById('start-live').addEventListener('click', startLive);

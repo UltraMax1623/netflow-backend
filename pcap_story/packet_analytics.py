@@ -4,6 +4,7 @@ No network lookups. Rates use capture time, not processing time. These rules
 identify investigation leads, never an authenticated attack verdict.
 """
 from collections import Counter, defaultdict
+from .traffic_signals import TrafficSignals
 from contextlib import contextmanager
 import ipaddress
 import math
@@ -16,6 +17,14 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class SecuritySettings(BaseModel):
+    scan_ports: int = Field(default=20, ge=5, le=1000)
+    sweep_hosts: int = Field(default=20, ge=5, le=1000)
+    reset_min: int = Field(default=50, ge=5, le=1000000)
+    dns_min_replies: int = Field(default=30, ge=10, le=1000000)
+    dns_queries_minute: int = Field(default=300, ge=10, le=1000000)
+    dns_long_names: int = Field(default=20, ge=5, le=1000)
+    outbound_mb: float = Field(default=100, ge=1, le=1000000, allow_inf_nan=False)
+    periodic_min: int = Field(default=10, ge=8, le=64)
     pps_threshold: float = Field(default=10000, ge=1, le=1e9, allow_inf_nan=False)
     icmp_pps_threshold: float = Field(default=1000, ge=1, le=1e9, allow_inf_nan=False)
     syn_min: int = Field(default=100, ge=10, le=1000000)
@@ -81,6 +90,7 @@ def dns_answer(record):
 
 def analyze_packets(path, settings=None):
     settings = settings or SecuritySettings()
+    signals = TrafficSignals(settings)
     protocol_counts, services, sources, destinations, sizes = (Counter() for _ in range(5))
     start, end, count, byte_count = None, None, 0, 0
     # First pass determines a fixed-size timeline even for long captures.
@@ -171,6 +181,7 @@ def analyze_packets(path, settings=None):
                 sources[src] += 1
                 destinations[dst] += 1
                 payload = packet.data
+                signals.packet(ts, src, dst, payload, len(frame))
                 if isinstance(packet, dpkt.ip.IP) and (packet.offset or packet.mf):
                     fragments += 1
                     protocol_counts["IP fragment"] += 1
@@ -187,6 +198,7 @@ def analyze_packets(path, settings=None):
                         syn_packets += 1
                         bucket["syn"] += 1
                         if key not in syns and remember(syns, key, {"ack": None, "completed": False}):
+                            signals.syn(ts, src, dst, payload.dport)
                             syn_dest[dst].add(key)
                             if payload.dport == 22:
                                 ssh_dest[dst].add(key)
@@ -211,6 +223,10 @@ def analyze_packets(path, settings=None):
                             request = dpkt.http.Request(payload.data)
                             http_requests += 1
                             services["HTTP"] += 1
+                            if 'authorization' in request.headers or 'proxy-authorization' in request.headers:
+                                finding(('cleartext-auth', src, dst), 'high', 'Authorization header sent over plaintext HTTP',
+                                        {'source': src, 'destination': dst, 'time': ts},
+                                        'Authentication material is visible without TLS. Header contents are intentionally omitted; verify whether this is an approved test or proxy.')
                             referer = request.headers.get("referer", "")
                             if referer.lower().startswith("https://"):
                                 finding(("http", src, dst), "warning", "Plaintext HTTP following an HTTPS referrer",
@@ -227,6 +243,7 @@ def analyze_packets(path, settings=None):
                     if payload.sport == 53 or payload.dport == 53:
                         try:
                             dns = dpkt.dns.DNS(payload.data)
+                            signals.dns_packet(ts, src, dst, dns)
                             services["DNS"] += 1
                             question = tuple((q.name.lower(), q.type, q.cls) for q in dns.qd)
                             if not question:
@@ -291,6 +308,9 @@ def analyze_packets(path, settings=None):
                     {"destination": dst, "attempts": len(keys), "unique_sources": len({key[0] for key in keys}),
                      "largest_single_source": max((len(v) for (s, d), v in ssh_sources.items() if d == dst), default=0)},
                     "Possible brute force or automated management. Encrypted SSH does not reveal failed passwords, usernames, or a later successful login; verify server authentication logs.")
+    signals.finish(finding, resets, protocol_counts['TCP'])
+    if signals.limited:
+        warnings.append('Extended analysis reached its 20,000-entry limit per table; charts and indicators may be incomplete.')
     if unsupported:
         warnings.append(f"{unsupported} frames have an unsupported link type ({linktype}); protocol/security coverage is incomplete.")
     if malformed:
@@ -303,12 +323,13 @@ def analyze_packets(path, settings=None):
         warnings.append("Only the first 100 distinct security findings are shown.")
     status = "high" if any(f["severity"] == "high" for f in findings) else "warning" if findings or warnings else "clear" if count else "unknown"
     return {
+        **signals.charts(),
         "summary": {"total_packets": count, "total_bytes": byte_count, "duration": duration,
                     "start_time": start, "end_time": end, "average_pps": count / duration if duration > 0 else None,
                     "peak_pps": peak, "unique_sources": len(sources), "unique_destinations": len(destinations),
                     "malformed_packets": malformed, "linktype": linktype},
         "protocols": dict(protocol_counts), "services": dict(services),
-        "top_sources": dict(sources.most_common(10)), "top_destinations": dict(destinations.most_common(10)),
+        "top_sources": dict(sources.most_common(30)), "top_destinations": dict(destinations.most_common(30)),
         "packet_sizes": {label: sizes[label] for label in ("≤64", "65–128", "129–512", "513–1024", "1025–1518", ">1518")},
         "timeline": timeline, "bin_seconds": bin_width,
         "tcp": {"syn_packets": syn_packets, "syn_ack_packets": synack_packets, "unique_syn_attempts": len(syns),
@@ -316,6 +337,8 @@ def analyze_packets(path, settings=None):
                 "completion_percent": completed / len(syns) * 100 if syns else None},
         "security": {"status": status, "findings": findings, "warnings": warnings, "thresholds": settings.model_dump(),
                      "coverage": [
+                         "Scans and DNS bursts use fixed 60-second intervals; boundaries may split a burst. Transfer volume covers this capture only. Periodicity samples the first 64 unique TCP attempts.",
+                         "Long DNS names, NXDOMAIN errors, resets and periodic connections are investigation leads, not malware attribution. No external reputation API is configured.",
                          "Heuristics flag investigation leads; green means no configured indicators found, not proof of safety.",
                          "Rates are capture-wide; thresholds are configurable, not a learned network baseline.",
                          "ARP requires local-link frames. Gateway comparison requires a known IP/MAC baseline.",

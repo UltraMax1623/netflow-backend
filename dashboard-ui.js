@@ -27,7 +27,9 @@ function initCharts() {
         ['trafficChart', 'line', 'Throughput (Mbps)'], ['protocolChart', 'bar', 'Packets'],
         ['usageChart', 'doughnut', 'Packets'], ['packetSizeChart', 'bar', 'Packets'],
         ['rateChart', 'line', 'Packets/s'], ['destinationChart', 'bar', 'Packets to destination'],
-        ['handshakeChart', 'bar', 'Count'], ['sourceChart', 'bar', 'Packets from source']
+        ['handshakeChart', 'bar', 'Count'], ['sourceChart', 'bar', 'Packets from source'],
+        ['conversationChart', 'bar', 'Captured frame bytes'], ['portChart', 'bar', 'Packets'],
+        ['directionChart', 'bar', 'Captured frame bytes'], ['dnsChart', 'bar', 'Count']
     ];
     for (const [id, type, label] of definitions) {
         chartInstances[id] = new Chart(byId(id), {
@@ -51,7 +53,8 @@ function renderAnalytics(result) {
     latestResult = result;
     const data = result?.analytics;
     const summary = data?.summary;
-    const timeline = data?.timeline || [];
+    const timeline = groupedTimeline(data?.timeline || [], Number(byId('chart-bin')?.value || 1));
+    const top = Number(byId('chart-top')?.value || 10);
     const times = timeline.map(b => new Date(b.time * 1000).toLocaleTimeString());
     const tcp = data?.tcp;
     setChart('trafficChart', times, timeline.map(b => b.mbps));
@@ -61,15 +64,19 @@ function renderAnalytics(result) {
         chart.data.datasets[0].label = 'All packets/s';
         chart.data.datasets.splice(1);
         for (const [key, label, color] of [['syn','SYN/s','#e11d48'], ['icmp','ICMP/s','#d97706']]) {
-            chart.data.datasets.push({label, data: timeline.map(b => (b[key] || 0) / data.bin_seconds),
+            chart.data.datasets.push({label, data: timeline.map(b => (b[key] || 0) / (data.bin_seconds * (b.groupSize || 1))),
                 borderColor: color, backgroundColor: color, pointRadius: 0, borderWidth: 2});
         }
         chart.options.plugins.legend.display = true;
         chart.update();
     }
     for (const [id, values] of [['protocolChart', data?.protocols], ['usageChart', data?.protocols],
-        ['packetSizeChart', data?.packet_sizes], ['destinationChart', data?.top_destinations], ['sourceChart', data?.top_sources]]) {
-        setChart(id, Object.keys(values || {}), Object.values(values || {}));
+        ['packetSizeChart', data?.packet_sizes], ['destinationChart', data?.top_destinations], ['sourceChart', data?.top_sources],
+        ['conversationChart', data?.top_conversations], ['portChart', data?.destination_ports],
+        ['directionChart', data?.direction_bytes], ['dnsChart', data?.dns_counts]]) {
+        const entries = Object.entries(values || {});
+        const limited = ['conversationChart','portChart','destinationChart','sourceChart'].includes(id) ? entries.slice(0, top) : entries;
+        setChart(id, limited.map(([key]) => key), limited.map(([,value]) => value));
     }
     setChart('handshakeChart', ['SYN packets', 'SYN-ACK packets', 'Unique attempts', 'Completed', 'RST packets'],
         tcp ? [tcp.syn_packets, tcp.syn_ack_packets, tcp.unique_syn_attempts, tcp.completed_handshakes, tcp.resets] : []);
@@ -90,7 +97,7 @@ function renderAnalytics(result) {
         const kind = node.dataset.protocolCount;
         const aliases = {DHCP: 'DHCP port'};
         const value = data ? data.protocols[kind] ?? data.services[aliases[kind] || kind] ?? 0 : null;
-        node.textContent = value == null ? 'No capture' : `${numberText(value)} packets`;
+        node.textContent = value == null ? 'No capture' : `${numberText(value)} packets · ${numberText(summary.total_packets ? value / summary.total_packets * 100 : 0)}%`;
     });
     renderSecurity(data?.security, summary);
     byId('download-report').disabled = !result;
@@ -127,7 +134,7 @@ function renderSecurity(security, summary) {
         const list = textElement('dl', '', 'detail-grid');
         for (const [key, value] of Object.entries(finding.evidence)) {
             list.append(textElement('dt', key.replaceAll('_', ' ')),
-                textElement('dd', key === 'time' ? dateText(value) : typeof value === 'number' ? numberText(value) : String(value)));
+                textElement('dd', ['time','window_start'].includes(key) ? dateText(value) : key === 'captured_bytes' ? byteText(value) : typeof value === 'number' ? numberText(value) : String(value)));
         }
         item.append(list); findings.append(item);
     }
@@ -145,8 +152,9 @@ function readSettings() {
     const form = byId('detection-settings');
     if (!form.reportValidity()) throw new Error('Check the detection settings.');
     const data = Object.fromEntries(new FormData(form));
-    for (const key of ['pps_threshold', 'icmp_pps_threshold', 'syn_min', 'completion_threshold', 'ssh_attempts'])
-        data[key] = Number(data[key]);
+    form.querySelectorAll('input[type=number]').forEach(input => {
+        if (input.name !== 'baseline_pps') data[input.name] = Number(data[input.name]);
+    });
     data.baseline_pps = data.baseline_pps ? Number(data.baseline_pps) : null;
     data.gateway_mac = data.gateway_mac.trim().toLowerCase();
     data.gateway_ip = data.gateway_ip.trim();
@@ -157,6 +165,7 @@ function buildDisplayGraph(result, options = {}) {
     const search = (options.search ?? byId('graph-search').value).trim().toLowerCase();
     const hideDNS = options.hideDNS ?? byId('hide-dns').checked;
     const limit = options.limit ?? Number(byId('graph-limit').value);
+    const protocol = options.protocol ?? (typeof document !== 'undefined' ? byId('graph-protocol')?.value || '' : '');
     const groups = new Map();
     function group(source, target, kind) {
         const key = JSON.stringify([source, target]);
@@ -167,13 +176,14 @@ function buildDisplayGraph(result, options = {}) {
     for (const connection of result.connections || []) {
         if (seen.has(connection.id)) continue;
         seen.add(connection.id);
+        if (protocol && !matchesProtocol(connection, protocol)) continue;
         if (hideDNS && (connection.destination_port === 53 || connection.service === 'dns')) continue;
         const target = connection.domain || connection.destination_ip;
         const item = group(connection.source_ip, target, connection.domain ? 'domain' : 'server');
         item.connections.push(connection);
         item.services.add(connection.service === 'ssl' ? 'TLS' : connection.service?.toUpperCase() || connection.protocol?.toUpperCase() || 'Connection');
     }
-    if (!hideDNS) for (const activity of result.activities || []) {
+    if (!hideDNS && (!protocol || protocol === 'DNS')) for (const activity of result.activities || []) {
         for (const event of activity.evidence || []) {
             if (event.type === 'DNS_QUERY' && event.data.domain) {
                 group(event.source.ip, event.data.domain, 'domain').dns.add(event.id);
@@ -206,6 +216,7 @@ function buildDisplayGraph(result, options = {}) {
 }
 function sumKnown(values) { return values.length && values.every(v => v != null) ? values.reduce((a, b) => a + b, 0) : null; }
 function showDetails(element) {
+    if (byId('toggle-details')) setDetailsVisible(true);
     const panel = byId('graph-details');
     panel.replaceChildren(textElement('h3', element.data('label'), 'font-semibold mb-3'));
     const edges = element.isNode() ? element.connectedEdges() : [element];
@@ -286,6 +297,7 @@ function setupDashboard() {
         searchTimer = setTimeout(() => { if (graphResult) renderGraph(graphResult); }, 200);
     };
     byId('global-search').oninput = event => {
+        showWorkspace('analytics');
         byId('graph-search').value = event.target.value;
         byId('graph-search').dispatchEvent(new Event('input'));
     };
@@ -301,4 +313,130 @@ function setupDashboard() {
         try { readSettings(); byId('settings-status').textContent = 'Settings will apply to the next upload or live session.'; }
         catch (error) { byId('settings-status').textContent = error.message; }
     };
+}
+
+function groupedTimeline(timeline, size) {
+    const result = [];
+    for (let i = 0; i < timeline.length; i += size) {
+        const group = timeline.slice(i, i + size);
+        const sum = key => group.reduce((total, bin) => total + (bin[key] || 0), 0);
+        result.push({time: group[0].time, pps: sum('pps') / group.length,
+            mbps: sum('mbps') / group.length, syn: sum('syn'), icmp: sum('icmp'), groupSize: group.length});
+    }
+    return result;
+}
+function matchesProtocol(connection, protocol) {
+    if (protocol === 'DNS') return connection.service === 'dns' || connection.destination_port === 53 || connection.source_port === 53;
+    if (protocol === 'DHCP') return [67,68,546,547].includes(connection.destination_port) || [67,68,546,547].includes(connection.source_port);
+    if (protocol === 'IPv6') return connection.source_ip.includes(':');
+    if (protocol === 'Broadcast') return connection.destination_ip === '255.255.255.255';
+    return connection.protocol?.toUpperCase() === protocol;
+}
+function setDetailsVisible(visible) {
+    byId('graph-details').hidden = !visible;
+    document.querySelector('.graph-inspector').classList.toggle('details-hidden', !visible);
+    byId('toggle-details').textContent = visible ? 'Hide details' : 'Show details';
+    byId('toggle-details').setAttribute('aria-expanded', String(visible));
+    if (graph) graph.resize();
+}
+function showWorkspace(name) {
+    const aliases = {'flow-section':'analytics', 'traffic-health':'dashboard'};
+    name = aliases[name] || name;
+    if (!['dashboard','analytics','reports','settings','help'].includes(name)) name = 'dashboard';
+    document.querySelectorAll('.workspace-view').forEach(view => { view.hidden = view.id !== `view-${name}`; });
+    const titles = {dashboard:'Traffic dashboard', analytics:'Traffic analysis', reports:'Capture reports', settings:'Workspace settings', help:'Help & integrations'};
+    const descriptions = {dashboard:'Capture traffic. Understand what matters. Investigate the evidence.', analytics:'Explore devices, conversations and the evidence behind each connection.', reports:'Export the latest capture with its findings, thresholds and limitations.', settings:'Tune your charts, graph and investigation thresholds.', help:'Understand capture coverage and local analysis dependencies.'};
+    byId('page-title').textContent = titles[name];
+    byId('page-description').textContent = descriptions[name];
+    const shortcut = document.querySelector('.primary-link');
+    shortcut.href = name === 'analytics' ? '#dashboard' : '#analytics';
+    shortcut.textContent = name === 'analytics' ? '← Back to dashboard' : 'Open analysis →';
+    document.querySelectorAll('nav a').forEach(link => {
+        link.removeAttribute('aria-current');
+        if (link.hash === `#${name}`) link.setAttribute('aria-current','page');
+    });
+    byId('sidebar').classList.remove('pinned');
+    byId('nav-toggle').setAttribute('aria-expanded','false');
+    document.querySelector('main').scrollTop = 0;
+    requestAnimationFrame(() => {
+        Object.values(chartInstances).forEach(chart => chart.resize());
+        if (graph && name === 'analytics') { graph.resize(); graph.layout(graphLayout()).run(); }
+    });
+}
+function setupWorkspace() {
+    for (const id of ['trafficChart','usageChart']) byId('overview-chart-row').append(byId(id).parentElement.parentElement);
+    document.querySelectorAll('nav a').forEach(link => {
+        link.setAttribute('aria-label', link.textContent.trim());
+        link.title = link.textContent.trim();
+    });
+    document.addEventListener('click', event => {
+        const link = event.target.closest('a[href^="#"]');
+        if (!link) return;
+        event.preventDefault();
+        history.replaceState(null,'',link.hash);
+        showWorkspace(link.hash.slice(1));
+    });
+    window.addEventListener('hashchange', () => showWorkspace(location.hash.slice(1)));
+    byId('nav-toggle').onclick = () => {
+        const expanded = byId('sidebar').classList.toggle('pinned');
+        byId('nav-toggle').setAttribute('aria-expanded',String(expanded));
+    };
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            byId('sidebar').classList.remove('pinned');
+            byId('nav-toggle').setAttribute('aria-expanded','false');
+        }
+    });
+    document.querySelectorAll('[data-protocol-count]').forEach(node => {
+        const card = node.closest('.protocol-cards > div');
+        card.tabIndex = 0; card.setAttribute('role','button');
+        card.setAttribute('aria-label', `Analyze ${node.dataset.protocolCount} traffic`);
+        const activate = () => {
+            byId('graph-protocol').value = node.dataset.protocolCount;
+            byId('graph-search').value = ''; byId('global-search').value = '';
+            byId('graph-device').value = ''; byId('hide-dns').checked = false;
+            showWorkspace('analytics'); updateProtocolFilter();
+        };
+        card.onclick = activate;
+        card.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(); } };
+        card.querySelectorAll('a').forEach(link => link.remove());
+    });
+    byId('graph-protocol').onchange = updateProtocolFilter;
+    byId('clear-graph-filters').onclick = () => {
+        for (const id of ['graph-device','graph-search','global-search','graph-protocol']) byId(id).value = '';
+        byId('hide-dns').checked = false;
+        updateProtocolFilter();
+    };
+    for (const id of ['layout-choice','edge-labels']) byId(id).onchange = () => { if (graphResult) renderGraph(graphResult); };
+    for (const id of ['chart-top','chart-bin']) byId(id).onchange = () => { if (latestResult) renderAnalytics(latestResult); };
+    byId('graph-fullscreen').onclick = async () => {
+        try {
+            if (document.fullscreenElement) await document.exitFullscreen();
+            else await byId('connections-panel').requestFullscreen();
+        } catch { byId('graph-status').textContent = 'Fullscreen is unavailable in this browser.'; }
+    };
+    document.addEventListener('fullscreenchange', () => {
+        byId('graph-fullscreen').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+        if (graph) graph.resize();
+    });
+    byId('toggle-details').onclick = () => setDetailsVisible(byId('graph-details').hidden);
+    new ResizeObserver(() => { if (graph) graph.resize(); }).observe(byId('flow-graph'));
+    setDetailsVisible(false);
+    document.querySelectorAll('canvas').forEach(canvas => {
+        const card = canvas.parentElement.parentElement;
+        const label = textElement('label');
+        const input = document.createElement('input'); input.type = 'checkbox'; input.checked = true;
+        input.onchange = () => { card.hidden = !input.checked; chartInstances[canvas.id]?.resize(); };
+        label.append(input, document.createTextNode(' ' + card.querySelector('h3').textContent));
+        byId('chart-visibility').append(label);
+    });
+    byId('integration-status').textContent = `Chart rendering: ${typeof Chart === 'function' ? 'loaded' : 'unavailable'}. Graph rendering: ${typeof cytoscape === 'function' ? 'loaded' : 'unavailable'}. Local capture requires Zeek and dumpcap; use Refresh adapters to check capture access.`;
+    showWorkspace(location.hash.slice(1));
+}
+function updateProtocolFilter() {
+    const kind = byId('graph-protocol').value;
+    const data = latestResult?.analytics;
+    const count = data ? data.protocols[kind] ?? data.services[kind === 'DHCP' ? 'DHCP port' : kind] ?? 0 : null;
+    byId('protocol-context').textContent = kind ? `${kind}: ${count == null ? 'no capture yet' : numberText(count) + ' captured packets'}. The graph shows Zeek connection evidence; ARP and some broadcast frames have no connection nodes. Charts remain capture-wide.` : '';
+    if (graphResult) renderGraph(graphResult);
 }

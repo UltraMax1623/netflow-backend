@@ -32,3 +32,12 @@ result = build(Array.from({length: 1000}, (_, i) => ({...first, id: String(i), d
 assert.equal(result.edges.length, 80);
 assert.equal(result.total, 1000);
 console.log('Graph tests passed: deduplication, grouping, client isolation, unknown bytes, filters, DNS evidence, and size limits.');
+context.series = [{time:1,pps:10,mbps:2,syn:2,icmp:1},{time:2,pps:20,mbps:4,syn:4,icmp:1},{time:3,pps:30,mbps:6,syn:6,icmp:1}];
+const bins = JSON.parse(vm.runInContext('JSON.stringify(groupedTimeline(series, 2))', context));
+assert.equal(bins.length, 2);
+assert.equal(bins[0].pps, 15);
+assert.equal(bins[0].syn, 6);
+assert.equal(bins[1].pps, 30);
+assert.equal(bins[1].groupSize, 1);
+assert.equal(build([first], {}, {protocol:'UDP'}).edges.length, 0);
+assert.equal(build([first], {}, {protocol:'TCP'}).edges.length, 1);

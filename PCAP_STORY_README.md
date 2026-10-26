@@ -311,3 +311,46 @@ python tests/browser_dashboard.py
 
 Browser checks require Playwright plus Chromium/Edge and CDN access; they use
 synthetic API responses to verify the UI, not real adapter capture.
+
+## Workspace layout and extended indicators
+
+Dashboard contains side-by-side upload/live inputs, the traffic assessment,
+protocol explorer and overview charts. Analysis is a separate view with a
+full-width connection graph, optional inspector, fullscreen mode and detailed
+charts. The sidebar expands on hover/focus and can be toggled on touch screens.
+Protocol cards filter connection evidence; ARP and some broadcast frames do not
+produce Zeek connection nodes. Charts always describe the entire capture.
+
+Display settings control graph layout, edge labels, chart visibility, top-N
+results (up to 30), and time-bin grouping. Grouped rates are averaged over the
+combined bin duration, rather than summing rates. Preferences last for the page
+session. New charts show directional conversation bytes, destination ports,
+private/public traffic direction, and DNS queries/replies/NXDOMAIN counts.
+DNS errors are a subset of replies, not an additional disjoint packet category.
+
+Extended detection defaults:
+
+| Pattern | Default evidence threshold |
+| --- | --- |
+| TCP port scan | 20 distinct ports per source/target in a fixed minute |
+| TCP host sweep | 20 hosts per source/port in a fixed minute |
+| TCP resets | 50 resets and at least 20% of TCP packets |
+| DNS name errors | 30 replies per client, at least 50% NXDOMAIN |
+| DNS burst | 300 queries per client in a fixed minute |
+| Long DNS names | 20 distinct names with a 50-character label or 100-character name |
+| Large outbound transfer | 100 MB of captured frames from one RFC1918/ULA source to one global destination |
+| Periodic TCP connections | 10 distinct SYN attempts; mean interval ≥5 seconds and variation ≤10% |
+| Plaintext authorization | Complete HTTP request with Authorization/Proxy-Authorization; header value is never included in findings |
+
+These thresholds are configurable in Settings (the reset/NXDOMAIN shares and
+name-length/periodicity criteria are fixed). Retransmitted SYNs do not inflate
+scan, sweep or periodicity counts. Fixed-minute boundaries can split bursts.
+Periodicity uses the first 64 attempts. Extended tables are bounded to 20,000
+keys each; truncation produces a coverage warning. Port/host/name sets stop at
+the configured threshold and report counts as "at least". Large transfers,
+regular polling, scanners, long DNS names and name errors can all be legitimate.
+
+There is **no external threat-intelligence API** configured. Analysis uses local
+FastAPI endpoints, Zeek and dpkt. Browser libraries/styles/fonts load from public
+CDNs. Help shows whether the chart and graph libraries loaded. Live capture still
+requires native Zeek/dumpcap and local access; it pauses between capture windows.
